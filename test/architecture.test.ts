@@ -50,4 +50,27 @@ describe('architecture', () => {
       .filter((rel) => FS_IMPORT.test(readFileSync(join(SRC, rel), 'utf8')));
     expect(offenders).toEqual([]);
   });
+
+  // Every result goes through the output boundary in result.ts (ADR 0003, ADR 0005).
+  it('every tool file wraps its handler in withAudit', () => {
+    const helpers = new Set(['result.ts', 'text.ts']);
+    const offenders = readdirSync(join(SRC, 'tools'))
+      .filter((name) => name.endsWith('.ts') && !helpers.has(name))
+      .filter((name) => !/\bwithAudit\(/.test(readFileSync(join(SRC, 'tools', name), 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('every resource file wraps its read and list callbacks', () => {
+    const offenders = readdirSync(join(SRC, 'resources'))
+      .filter((name) => name.endsWith('.ts'))
+      .filter((name) => {
+        const source = readFileSync(join(SRC, 'resources', name), 'utf8');
+        const hasList = /\blist:\s*(?!undefined)/.test(source);
+        return (
+          !/\bwithResourceAudit\(/.test(source) ||
+          (hasList && !/\blist:\s*withResourceList\(/.test(source))
+        );
+      });
+    expect(offenders).toEqual([]);
+  });
 });

@@ -23,13 +23,13 @@ The agent can find and read architecture decisions.
 
 ## Acceptance criteria
 
-- [ ] Works on `examples/demo-project`.
-- [ ] Unknown id returns a tool error listing the available ids.
-- [ ] A malformed ADR is still listed (requirements decision 4): title from the first heading or
+- [x] Works on `examples/demo-project`.
+- [x] Unknown id returns a tool error listing the available ids.
+- [x] A malformed ADR is still listed (requirements decision 4): title from the first heading or
       the filename slug, status `Unknown` when there is no `Status` bullet, missing sections empty.
       If no section is found, the whole body goes into `context`. Demo 0004 returns title
       "Notes from the old wiki", status `Unknown`, body in `context`.
-- [ ] `list_adrs({ status: "accepted" })` returns 0001 and 0002 on the demo project.
-- [ ] `get_adr` on the id of a skipped file returns a tool error with the reason.
-- [ ] Both tools have `readOnlyHint: true` and an `outputSchema`.
-- [ ] Tests via `InMemoryTransport` + `Client`.
+- [x] `list_adrs({ status: "accepted" })` returns 0001 and 0002 on the demo project.
+- [x] `get_adr` on the id of a skipped file returns a tool error with the reason.
+- [x] Both tools have `readOnlyHint: true` and an `outputSchema`.
+- [x] Tests via `InMemoryTransport` + `Client`.

@@ -3,6 +3,7 @@
 
 import {
   type CallToolResult,
+  type ListResourcesResult,
   type ReadResourceResult,
   ResourceNotFoundError,
 } from '@modelcontextprotocol/server';
@@ -147,6 +148,39 @@ export function withResourceAudit<Args extends [URL, ...unknown[]]>(
     });
     if (result === undefined) throw failure;
     return result;
+  };
+}
+
+/**
+ * Wraps a resource template's `list` callback. Names and titles come from file content, so every
+ * entry is rebuilt from `uri`, `name`, `title`, `description` and `mimeType`, with text redacted.
+ * Errors are rethrown with a redacted message, as in withResourceAudit. A listing is not a read,
+ * so it writes no audit line.
+ */
+export function withResourceList<Args extends unknown[]>(
+  list: (...args: Args) => ListResourcesResult | Promise<ListResourcesResult>,
+): (...args: Args) => Promise<ListResourcesResult> {
+  return async (...args) => {
+    const counter = { count: 0 };
+    let raw: ListResourcesResult;
+    try {
+      raw = await list(...args);
+    } catch (error) {
+      throw error instanceof SafeFsError
+        ? new Error(redact(error.message).text)
+        : new Error(internalError('resource list', error));
+    }
+    return {
+      resources: raw.resources.map((resource) => ({
+        uri: redactText(resource.uri, counter),
+        name: redactText(resource.name, counter),
+        ...(resource.title === undefined ? {} : { title: redactText(resource.title, counter) }),
+        ...(resource.description === undefined
+          ? {}
+          : { description: redactText(resource.description, counter) }),
+        ...(resource.mimeType === undefined ? {} : { mimeType: resource.mimeType }),
+      })),
+    };
   };
 }
 

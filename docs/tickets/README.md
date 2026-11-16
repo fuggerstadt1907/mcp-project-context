@@ -11,6 +11,7 @@ Work them in order. Each ticket is one PR. Create them as GitHub issues with
 | 04 | [Result helper and audit log](04-result-helper-audit.md) | 02, 03 | S |
 | 05 | [ADR tools and resource](05-adr-tools.md) | 04 | M |
 | 06 | [Ticket tools and resource](06-ticket-tools.md) | 04 | M |
+| 05b | [ADR format variants](05b-adr-formats.md) | 05, 06 | S |
 | 07 | [Conventions and search](07-conventions-search.md) | 05, 06 | M |
 | 08 | [Write tool behind flag](08-write-tool.md) | 05 | S |
 | 09 | [Integration tests and stdio smoke test](09-integration-tests.md) | 07, 08 | S |
@@ -19,5 +20,6 @@ Work them in order. Each ticket is one PR. Create them as GitHub issues with
 
 Size: S ≈ 1–2 h, M ≈ 2–4 h with an agent, including review.
 
-Tickets 01–04 are the foundation. 05 and 06 can run in parallel.
+Tickets 01–04 are the foundation. 05 and 06 can run in parallel. 05b comes after 06, because it
+reuses the frontmatter parser from 06.
 Decisions behind the tickets are in the decision log of `docs/requirements.md`.

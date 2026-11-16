@@ -13,7 +13,7 @@ const config: Config = {
 };
 
 describe('createServer', () => {
-  it('answers listTools with an empty list', async () => {
+  it('lists the read-only tools', async () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await createServer(config).connect(serverTransport);
     const client = new Client({ name: 'test', version: '0.0.0' });
@@ -21,7 +21,7 @@ describe('createServer', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools).toEqual([]);
+    expect(tools.map((tool) => tool.name)).toEqual(['list_adrs', 'get_adr']);
     await client.close();
   });
 });
