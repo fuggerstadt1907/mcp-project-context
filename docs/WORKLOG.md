@@ -311,7 +311,7 @@ Be honest: mistakes caught in review are the most valuable part.
 - Not tested:
   - A real stdio process (ticket 09) and performance on 500 files (ticket 07).
   - Coverage, because `@vitest/coverage-v8` is not installed.
-- PR: #
+- PR: #18
 
 ### Dogfooding – first real use (2026-11-16)
 - Registered the server in its own repo (`claude mcp add`, local build).
