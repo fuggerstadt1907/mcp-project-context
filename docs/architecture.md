@@ -44,6 +44,8 @@ Logging never touches stdout.
 - [ADR 0001](adr/0001-sdk-v2-and-stdio.md): MCP TypeScript SDK v2, stdio transport only.
 - [ADR 0002](adr/0002-read-only-by-default.md): Read-only by default, write tools registered only behind a flag.
 - [ADR 0003](adr/0003-redact-at-output-boundary.md): Redact once, at the output boundary.
+- [ADR 0004](adr/0004-read-on-every-call.md): Sources read from disk on every call, no cache.
+- [ADR 0005](adr/0005-audit-to-stderr-only.md): Audit log on stderr only, including resource reads.
 
 ## SDK usage (verified against `@modelcontextprotocol/server` 2.4.0)
 
