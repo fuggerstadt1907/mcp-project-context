@@ -150,3 +150,108 @@ describe('readTextFile', () => {
     expect((error as Error).message).not.toContain(base);
   });
 });
+
+describe('exists', () => {
+  it('is true for a readable file, also when it is too large', async () => {
+    write('CLAUDE.md');
+    write('big.md', 'x'.repeat(2048));
+    await expect(safeFs.exists('CLAUDE.md')).resolves.toBe(true);
+    await expect(safeFs.exists('big.md')).resolves.toBe(true);
+  });
+
+  it('is false for a missing file, a broken symlink and a directory', async () => {
+    mkdirSync(join(root, 'dir.md'));
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'broken.md'));
+    await expect(safeFs.exists('AGENTS.md')).resolves.toBe(false);
+    await expect(safeFs.exists('broken.md')).resolves.toBe(false);
+    await expect(safeFs.exists('dir.md')).resolves.toBe(false);
+  });
+
+  it('throws for paths that break a rule', async () => {
+    write('.env');
+    await expectReason(safeFs.exists('../secret.md'), 'outside_root');
+    await expectReason(safeFs.exists('.env'), 'denied');
+    await expectReason(safeFs.exists('a.ts'), 'extension');
+  });
+});
+
+describe('listFiles', () => {
+  it('lists allowed files recursively, sorted, relative to root', async () => {
+    write('tickets/b/y.md');
+    write('tickets/a/x.md');
+    write('tickets/T-001.md');
+    write('tickets/notes.txt');
+    write('tickets/script.ts');
+    write('other/z.md');
+    await expect(safeFs.listFiles('tickets')).resolves.toEqual([
+      'tickets/T-001.md',
+      'tickets/a/x.md',
+      'tickets/b/y.md',
+      'tickets/notes.txt',
+    ]);
+  });
+
+  it('filters by extension within the allow-list', async () => {
+    write('docs/a.md');
+    write('docs/b.json');
+    write('docs/c.ts');
+    await expect(safeFs.listFiles('docs', { extensions: ['.md'] })).resolves.toEqual(['docs/a.md']);
+    await expect(safeFs.listFiles('docs', { extensions: ['.ts'] })).resolves.toEqual([]);
+  });
+
+  it('lists the root itself', async () => {
+    write('CLAUDE.md');
+    write('docs/a.md');
+    await expect(safeFs.listFiles('.')).resolves.toEqual(['CLAUDE.md', 'docs/a.md']);
+  });
+
+  it('never returns denied files', async () => {
+    write('a.md');
+    write('.env.md');
+    write('.git/x.md');
+    write('node_modules/x/readme.md');
+    write('sub/node_modules/y.md');
+    await expect(safeFs.listFiles('.')).resolves.toEqual(['a.md']);
+  });
+
+  it('keeps files over the size limit, so callers can report them as skipped', async () => {
+    write('docs/big.md', 'x'.repeat(2048));
+    await expect(safeFs.listFiles('docs')).resolves.toEqual(['docs/big.md']);
+  });
+
+  it('does not follow symlinked directories', async () => {
+    mkdirSync(join(base, 'outside'));
+    writeFileSync(join(base, 'outside/leak.md'), 'outside root');
+    write('docs/inside/a.md');
+    symlinkSync(join(base, 'outside'), join(root, 'docs/out'));
+    symlinkSync(join(root, 'docs/inside'), join(root, 'docs/again'));
+    symlinkSync(join(root, 'docs'), join(root, 'docs/loop'));
+    await expect(safeFs.listFiles('docs')).resolves.toEqual(['docs/inside/a.md']);
+  });
+
+  it('keeps symlinked files only if their target passes every rule', async () => {
+    write('docs/a.md');
+    write('.env', 'SECRET=1');
+    write('src/x.ts');
+    symlinkSync(join(root, 'docs/a.md'), join(root, 'docs/ok.md'));
+    symlinkSync(join(base, 'secret.md'), join(root, 'docs/outside.md'));
+    symlinkSync(join(root, '.env'), join(root, 'docs/env.md'));
+    symlinkSync(join(root, 'src/x.ts'), join(root, 'docs/code.md'));
+    symlinkSync(join(root, 'docs/nowhere.md'), join(root, 'docs/broken.md'));
+    await expect(safeFs.listFiles('docs')).resolves.toEqual(['docs/a.md', 'docs/ok.md']);
+  });
+
+  it('rejects a directory outside root or on the deny list', async () => {
+    write('.git/x.md');
+    symlinkSync(base, join(root, 'up'));
+    await expectReason(safeFs.listFiles('..'), 'outside_root');
+    await expectReason(safeFs.listFiles('up'), 'outside_root');
+    await expectReason(safeFs.listFiles('.git'), 'denied');
+  });
+
+  it('reports a missing directory or a file as not_found', async () => {
+    write('a.md');
+    await expectReason(safeFs.listFiles('tickets'), 'not_found');
+    await expectReason(safeFs.listFiles('a.md'), 'not_found');
+  });
+});

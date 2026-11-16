@@ -1,7 +1,7 @@
 // The only way to read files. Every path is checked against root, the deny list, the extension
 // allow-list and the size limit before anything is read.
 import { lstatSync, realpathSync } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Config } from '../config.js';
 
@@ -24,6 +24,11 @@ export class SafeFsError extends Error {
 
 export interface SafeFs {
   readTextFile(relPath: string): Promise<string>;
+  // False only for a missing file; a path that breaks a rule throws. Ignores the size limit.
+  exists(relPath: string): Promise<boolean>;
+  // Recursive, sorted, paths relative to root with '/'. Never enters symlinked directories.
+  // Files over the size limit are listed, so callers can report them as skipped.
+  listFiles(relDir: string, options?: { extensions?: readonly string[] }): Promise<string[]>;
 }
 
 // config.root must be a real path, as loadConfig returns it.
@@ -67,13 +72,19 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
   }
 
-  async function readTextFile(relPath: string): Promise<string> {
+  // Rules 1 to 4 plus "is a regular file". Returns the real path and size for rule 5.
+  async function inspect(relPath: string): Promise<{ real: string; size: number }> {
     const { real, exists } = resolveInsideRoot(relPath);
     checkFileRules(relPath, real);
     if (!exists) throw notFound(relPath);
     const info = await stat(real).catch(() => undefined);
     if (!info?.isFile()) throw notFound(relPath);
-    if (info.size > maxBytes) {
+    return { real, size: info.size };
+  }
+
+  async function readTextFile(relPath: string): Promise<string> {
+    const { real, size } = await inspect(relPath);
+    if (size > maxBytes) {
       throw new SafeFsError(
         'too_large',
         relPath,
@@ -83,7 +94,62 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     return readFile(real, 'utf8');
   }
 
-  return { readTextFile };
+  async function exists(relPath: string): Promise<boolean> {
+    try {
+      await inspect(relPath);
+      return true;
+    } catch (error) {
+      if (error instanceof SafeFsError && error.reason === 'not_found') return false;
+      throw error;
+    }
+  }
+
+  async function listFiles(
+    relDir: string,
+    options: { extensions?: readonly string[] } = {},
+  ): Promise<string[]> {
+    const { real, exists } = resolveInsideRoot(relDir);
+    for (const path of [relative(root, resolve(root, relDir)), relative(root, real)]) {
+      if (isDenied(path)) {
+        throw new SafeFsError('denied', relDir, `Directory is on the deny list: ${relDir}`);
+      }
+    }
+    const info = exists ? await stat(real).catch(() => undefined) : undefined;
+    if (!info?.isDirectory()) {
+      throw new SafeFsError('not_found', relDir, `Directory not found: ${relDir}`);
+    }
+
+    const wanted = options.extensions?.map((ext) => ext.toLowerCase());
+    const files: string[] = [];
+    const prefix = toPosix(relative(root, resolve(root, relDir)));
+    await walk(real, prefix, files);
+    return files
+      .filter((file) => wanted === undefined || wanted.includes(extname(file).toLowerCase()))
+      .sort();
+  }
+
+  // Real directories only. Symlinked files go through inspect(), which checks their target;
+  // symlinked directories are skipped, which also rules out cycles.
+  async function walk(absDir: string, relDir: string, out: string[]): Promise<void> {
+    const entries = await readdir(absDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!DENIED_SEGMENTS.has(entry.name)) await walk(join(absDir, entry.name), rel, out);
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
+        const ok = await inspect(rel).then(
+          () => true,
+          (error: unknown) => {
+            if (error instanceof SafeFsError) return false;
+            throw error;
+          },
+        );
+        if (ok) out.push(rel);
+      }
+    }
+  }
+
+  return { readTextFile, exists, listFiles };
 }
 
 function outsideRoot(relPath: string): SafeFsError {
@@ -92,6 +158,10 @@ function outsideRoot(relPath: string): SafeFsError {
 
 function notFound(relPath: string): SafeFsError {
   return new SafeFsError('not_found', relPath, `File not found: ${relPath}`);
+}
+
+function toPosix(path: string): string {
+  return path.split(sep).join('/');
 }
 
 function isDenied(relPath: string): boolean {
