@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 2 / 10 |
-| Total time | 1.25 h |
+| Total time | TODO |
 | Questions the agent asked before coding | 31 |
 | Agent mistakes caught in review | 12 |
 | Test coverage (src) | – |
@@ -88,7 +88,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 02 – Safe file access (2026-11-16)
 
-- Time: 20 min (measured from the start of `/implement-ticket` to the PR number entered here)
+- Time: TODO
 - Skills used: implement-ticket, review subagent
 - Questions the agent asked before coding:
   - Base branch while PR #12 was still open: wait for the merge (the user merged it meanwhile).
