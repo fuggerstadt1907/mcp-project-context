@@ -64,6 +64,12 @@ describe('cli', () => {
       '--tickets-dir resolves outside --root',
     ],
     ['an unknown flag', ['--root', DEMO, '--nope'], "Unknown option '--nope'"],
+    // ADR 0005: audit goes to stderr only.
+    [
+      '--audit-file',
+      ['--root', DEMO, '--audit-file', 'audit.log'],
+      "Unknown option '--audit-file'",
+    ],
   ])(
     'exits with code 2 for %s',
     async (_name, args, message) => {
