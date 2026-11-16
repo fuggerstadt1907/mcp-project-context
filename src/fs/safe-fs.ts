@@ -2,8 +2,11 @@
 // allow-list and the size limit before anything is read.
 import { lstatSync, realpathSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Config } from '../config.js';
+
+export const ALLOWED_EXTENSIONS = ['.md', '.mdx', '.txt', '.yaml', '.yml', '.json'] as const;
+const DENIED_SEGMENTS = new Set(['.git', 'node_modules']);
 
 export type SafeFsReason = 'outside_root' | 'denied' | 'extension' | 'too_large' | 'not_found';
 
@@ -26,6 +29,7 @@ export interface SafeFs {
 // config.root must be a real path, as loadConfig returns it.
 export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs {
   const { root } = config;
+  const maxBytes = config.maxFileKb * 1024;
 
   // Rules 1 and 2. Returns the real path; it may not exist yet.
   function resolveInsideRoot(relPath: string): { real: string; exists: boolean } {
@@ -44,11 +48,38 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     return resolved;
   }
 
+  // Rules 3 and 4, on the requested path and on the symlink target, so a link cannot rename a
+  // denied file into an allowed one or the other way round.
+  function checkFileRules(relPath: string, real: string): void {
+    for (const path of [relative(root, resolve(root, relPath)), relative(root, real)]) {
+      if (isDenied(path)) {
+        throw new SafeFsError('denied', relPath, `Path is on the deny list: ${relPath}`);
+      }
+    }
+    for (const path of [relPath, real]) {
+      if (!hasAllowedExtension(path)) {
+        throw new SafeFsError(
+          'extension',
+          relPath,
+          `File type is not allowed: ${relPath}. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        );
+      }
+    }
+  }
+
   async function readTextFile(relPath: string): Promise<string> {
     const { real, exists } = resolveInsideRoot(relPath);
+    checkFileRules(relPath, real);
     if (!exists) throw notFound(relPath);
     const info = await stat(real).catch(() => undefined);
     if (!info?.isFile()) throw notFound(relPath);
+    if (info.size > maxBytes) {
+      throw new SafeFsError(
+        'too_large',
+        relPath,
+        `File is larger than ${config.maxFileKb} KB: ${relPath}`,
+      );
+    }
     return readFile(real, 'utf8');
   }
 
@@ -61,6 +92,17 @@ function outsideRoot(relPath: string): SafeFsError {
 
 function notFound(relPath: string): SafeFsError {
   return new SafeFsError('not_found', relPath, `File not found: ${relPath}`);
+}
+
+function isDenied(relPath: string): boolean {
+  const segments = relPath.split(sep);
+  return (
+    segments.some((segment) => DENIED_SEGMENTS.has(segment)) || basename(relPath).startsWith('.env')
+  );
+}
+
+function hasAllowedExtension(path: string): boolean {
+  return (ALLOWED_EXTENSIONS as readonly string[]).includes(extname(path).toLowerCase());
 }
 
 // Path-based instead of a prefix check, so root '/' and dir names like '..foo' work.
