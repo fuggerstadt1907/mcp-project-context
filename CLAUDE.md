@@ -18,6 +18,10 @@ Read `docs/requirements.md` and `docs/architecture.md` before any change. Decisi
    Summary table current. Leave "Time" as TODO. Propose a time in your final report instead:
    measured from the start of the session to the PR, rounded up to 10 minutes. The human enters
    the time by hand after the PR is created and reviewed.
+7. Decide implementation details yourself (internal data shapes, naming, edge-case handling inside
+   one module) with your recommended option and record them in the decision log. Ask the human only
+   when a decision changes scope, the public tool/resource output, security behaviour, contradicts
+   an existing doc or ADR, or is hard to undo. Batch questions; at most one round per stage.
 
 ## Hard rules
 
