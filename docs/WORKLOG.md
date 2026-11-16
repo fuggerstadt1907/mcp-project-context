@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 4 / 10 |
-| Total time | 1,75 h |
+| Total time | 2,42 h |
 | Questions the agent asked before coding | 37 |
 | Agent mistakes caught in review | 23 |
 | Test coverage (src) | – |
@@ -175,7 +175,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 04 – Result helper and audit log (2026-11-16)
 
-- Time: TODO
+- Time: 40 min
 - Skills used: implement-ticket, review subagent
 - Questions the agent asked before coding (one round, the user chose the recommended option for both):
   - How `withAudit` handles exceptions other than `SafeFsError`: catch all, with a generic message
@@ -215,7 +215,7 @@ Be honest: mistakes caught in review are the most valuable part.
   - The audit line for calls the SDK rejects before the handler (decision 57). There is none.
   - Coverage, because `@vitest/coverage-v8` is not installed.
   - A CI run, which needs a push.
-- PR: #
+- PR: #15
 
 ## Skill improvements
 
