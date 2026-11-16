@@ -59,6 +59,7 @@ There are no roles or accounts. One server process serves one project root for o
 | FR-14 | An ADR that does not follow the template is still listed (see Edge cases). |
 | FR-15 | Files skipped during listing or search (over `--max-file-kb`, unparseable) are left out of the result. A warning with path and reason goes to stderr, and the text content states how many files were skipped and why (for example "1 file skipped (too large)"). `get_adr`/`get_ticket` on such an id return a tool error with the reason. |
 | FR-16 | If `--adr-dir` or `--tickets-dir` does not exist, the server still starts and logs a warning. The matching list tools return an empty list, and the text content names the missing directory and the flag to set. |
+| FR-17 | An ADR's status and date are read from a `- Status:`/`- Date:` bullet, a `## Status` section with a `Date:` line (Nygard, title `# 1. …`) or frontmatter `status:`/`date:` (MADR 3). |
 
 ### Non-functional
 
@@ -225,6 +226,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 04 Result helper and audit | FR-10, NFR-6 | done · 2026-11-16 · ticket-04-result-helper-audit |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | done · 2026-11-16 · ticket-05-adr-tools |
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
+| 05b ADR format variants (#16) | FR-14, FR-17 | open |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
 | 08 Write tool | FR-9, NFR-4 | open |
 | 09 Integration tests | Goal, AC25, AC29 | open |
@@ -326,6 +328,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 62 | Where the skip and missing-dir hints go | Text content only. `structuredContent` of `list_adrs` stays `{ adrs }` as in the ticket. `get_adr` names `--adr-dir` when the directory is missing. An empty `status` is no filter. | FR-15 and FR-16 ask for the text. An agent that sends optional fields as `""` still gets all ADRs (found in review). |
 | 63 | Status, date and sections | `Status`/`Date` bullets (`-`, `*`, `+`, bold allowed) count only before the first `##` heading, and an empty value counts as missing. A section runs to the next heading of level 1 or 2, so `###` stays inside it. Headings in code fences are ignored. Warnings fire on every call that reads the file. | A bullet in Consequences is not the ADR's status. Logging once per process would need state the sources must not hold (ADR 0004). |
 | 64 | Resource list | `adr://{id}` lists readable ADRs with name `ADR 0002` and the title. `withResourceList` in `result.ts` redacts uri, name and title and rethrows errors with a redacted message. It writes no audit line. | Titles come from file content and would otherwise reach the client unredacted. A listing is not a read (NFR-6). |
+| 65 | ADRs in other formats | Supported: status and date from a bullet, a Nygard `## Status` section or MADR 3 frontmatter, and a `1.` title prefix is stripped. New stage 05b after ticket 06, which brings the frontmatter parser. Decided by the user after the ticket 05 review. | Common real-world ADRs would otherwise all show status `Unknown`. |
 
 ## Open points
 
@@ -343,9 +346,8 @@ Each ticket is testable on its own with `InMemoryTransport`.
 - Ticket 06: output schemas follow decision 56, and sources do not put ids into exception messages
   (decision 52). The architecture test now checks `withAudit`, `withResourceAudit` and
   `withResourceList` (done in ticket 05).
-- Follow-up (ADR parser): ADRs in the Nygard/adr-tools format (`## Status` section, title
-  `# 1. Record …`) get status `Unknown` and keep the `1.` prefix. Supporting it changes FR-14 and
-  the parser; decide before ticket 10 whether the README should name it as a limitation.
+- Ticket 05b: precedence of the status sources, whole `Superseded by …` line or first word, and
+  frontmatter outside the subset. Listed in the ticket; resolve with grill-ticket before it starts.
 - Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
   reports as missing. This is CommonMark behaviour; kept.
 - Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
