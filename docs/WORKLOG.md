@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 5 / 10 |
+| Tickets done | 6 / 10 |
 | Total time | 3,42 h |
-| Questions the agent asked before coding | 41 |
-| Agent mistakes caught in review | 28 |
+| Questions the agent asked before coding | 45 |
+| Agent mistakes caught in review | 31 |
 | Test coverage (src) | – |
 
 ## Template
@@ -262,6 +262,56 @@ Be honest: mistakes caught in review are the most valuable part.
   - A `resources/list` failure end to end. Only `withResourceList` is tested on its own.
   - Coverage, because `@vitest/coverage-v8` is not installed.
 - PR: #17
+
+### Ticket 06 – Ticket tools and resource (2026-11-16)
+
+- Time: TODO
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding (one round, the user chose the recommended option for all):
+  - Text content format of `list_tickets` and `get_ticket`: compact markdown like the ADR tools
+    (decision 66).
+  - Which files are tickets and how parse failures are reported: `README.md` ignored, everything
+    else counted with a reason (decision 67).
+  - How `get_ticket` finds a skipped file whose id it cannot read: by the filename id
+    (decision 68).
+  - Plan, test points and branch: confirmed.
+- Question after the review: which ticket ids are allowed. The user chose `[A-Za-z0-9._-]+`
+  (decision 69).
+- Decisions made (and where recorded):
+  - Decisions 66 to 72 in `docs/requirements.md`. The agent took 70 to 72 under rule 7.
+  - The frontmatter parser lives in its own module for ticket 05b. Open points for 05b and the
+    README (ticket 10) are noted.
+  - `findHeadings` and the client test helpers moved to shared modules (`src/sources/markdown.ts`,
+    `test/support.ts`).
+- Mistakes caught in review:
+  - Ids like `a/b` or `T 2` are valid frontmatter, but the `ticket://` URIs built from them could
+    not be read back, because the SDK does not decode `%`-escapes. Ids are now restricted, and
+    other tickets are skipped as `invalid id`.
+  - Checklist items inside a code fence in the acceptance section counted as criteria. The loop
+    now tracks fences like `findHeadings`.
+  - A `__proto__` frontmatter key set the prototype of the parsed object. It is now an object
+    without a prototype.
+  - Also from the review: `docs/architecture.md` was out of date and the BOM was a literal
+    invisible character in a regex. Both fixed.
+- Mistakes the agent caught itself:
+  - Two wrong test expectations: the line number of a block-list item, and how blank lines join
+    around a removed section. The code was right in both cases.
+- Tested: 313 vitest tests, 34 of them in `test/frontmatter.test.ts` and 60 in
+  `test/tickets.test.ts`, over `InMemoryTransport` + `Client` against the demo project and temp
+  roots. They cover:
+  - AC5 (`TODO` + `api`), AC6 (`T-003` in three forms), AC14, AC15 (list and get), AC16 (no
+    warnings for the demo tickets), AC17 (block list, nesting, multi-line, no id, empty id, no
+    frontmatter, array id), AC19, AC20, AC22 (tool, resource and resource list),
+  - filters in several casings, exact match, empty filters, AND, subdirectories, numeric sort,
+    README ignored, `--tickets-dir` elsewhere, unknown ids with the available list, the reason
+    for every kind of skipped file, invalid id characters,
+  - the parser cases from the ticket (`:` and `,` in quotes, `[]`, a block list) and 23 more
+    constructs outside the subset,
+  - one audit line per call without arguments, and nothing on stdout.
+- Not tested:
+  - A real stdio process (ticket 09) and performance on 500 files (ticket 07).
+  - Coverage, because `@vitest/coverage-v8` is not installed.
+- PR: #
 
 ### Dogfooding – first real use (2026-11-16)
 - Registered the server in its own repo (`claude mcp add`, local build).
