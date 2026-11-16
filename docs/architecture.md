@@ -33,7 +33,9 @@ Logging never touches stdout.
 | `src/fs/safe-fs.ts` | `createSafeFs(config)` with `readTextFile(rel)`, `exists(rel)`, `listFiles(relDir, { extensions })`. Enforces root (after realpath), deny list, extension allow-list, size limit; throws `SafeFsError` with a `reason`. Also exports the inside-root check that `config.ts` uses. |
 | `src/redact.ts` | `redact(text): { text, findings }`. Pattern table, one entry per secret or PII type. |
 | `src/sources/adr.ts` | Parse ADR markdown into `{ id, title, status, date, context, decision, consequences }`. |
-| `src/sources/tickets.ts` | Parse ticket markdown with YAML frontmatter. |
+| `src/sources/tickets.ts` | Parse `<tickets-dir>/**/*.md` into `{ id, title, status, labels, description, acceptanceCriteria }`. Id from the frontmatter. |
+| `src/sources/frontmatter.ts` | Own parser for the frontmatter subset in `docs/requirements.md` (no YAML dependency). Used by tickets, later by MADR ADRs (05b). |
+| `src/sources/markdown.ts` | Shared markdown helpers (headings outside code fences). |
 | `src/sources/conventions.ts` | Load known convention files if present. |
 | `src/search.ts` | Keyword search over all sources, simple scoring, snippets. |
 | `src/tools/*.ts` | One tool per file: schema, annotations, handler. |

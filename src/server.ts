@@ -2,9 +2,13 @@ import { McpServer } from '@modelcontextprotocol/server';
 import type { Config } from './config.js';
 import { createSafeFs } from './fs/safe-fs.js';
 import { registerAdrResource } from './resources/adr.js';
+import { registerTicketResource } from './resources/ticket.js';
 import { createAdrSource } from './sources/adr.js';
+import { createTicketSource } from './sources/tickets.js';
 import { registerGetAdr } from './tools/get-adr.js';
+import { registerGetTicket } from './tools/get-ticket.js';
 import { registerListAdrs } from './tools/list-adrs.js';
+import { registerListTickets } from './tools/list-tickets.js';
 import { VERSION } from './version.js';
 
 export function createServer(config: Config): McpServer {
@@ -15,9 +19,16 @@ export function createServer(config: Config): McpServer {
   );
   const safeFs = createSafeFs(config);
   const adrs = createAdrSource(safeFs, config.adrDir);
+  const tickets = createTicketSource(safeFs, config.ticketsDir);
 
   registerListAdrs(server, adrs, config.adrDir);
   registerGetAdr(server, adrs, { adrDir: config.adrDir, maxFileKb: config.maxFileKb });
   registerAdrResource(server, adrs);
+  registerListTickets(server, tickets, config.ticketsDir);
+  registerGetTicket(server, tickets, {
+    ticketsDir: config.ticketsDir,
+    maxFileKb: config.maxFileKb,
+  });
+  registerTicketResource(server, tickets);
   return server;
 }

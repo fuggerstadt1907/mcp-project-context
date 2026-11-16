@@ -1,86 +1,20 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { Client } from '@modelcontextprotocol/client';
-import { type CallToolResult, InMemoryTransport } from '@modelcontextprotocol/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Config } from '../src/config.js';
-import { createServer } from '../src/server.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Client } from '@modelcontextprotocol/client';
+import { describe, expect, it } from 'vitest';
+import {
+  call,
+  captureIo,
+  connect,
+  DEMO,
+  tempRoot,
+  text,
+  withClient as withClientFor,
+} from './support.js';
 
-const DEMO = realpathSync(join(import.meta.dirname, '../examples/demo-project'));
 const EMAIL = ['jane.doe', '@', 'example.com'].join('');
 
-let stderr: string[];
-let stdout: ReturnType<typeof vi.spyOn>;
-let tempRoots: string[] = [];
-
-beforeEach(() => {
-  stderr = [];
-  vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
-    stderr.push(String(chunk));
-    return true;
-  });
-  stdout = vi.spyOn(process.stdout, 'write');
-});
-
-afterEach(() => {
-  expect(stdout).not.toHaveBeenCalled();
-  vi.restoreAllMocks();
-  for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
-  tempRoots = [];
-});
-
-function logLines(): Record<string, unknown>[] {
-  return stderr
-    .join('')
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-}
-
-function tempRoot(files: Record<string, string>): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'adr-test-')));
-  tempRoots.push(root);
-  for (const [path, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
-  }
-  return root;
-}
-
-async function connect(root: string, overrides: Partial<Config> = {}): Promise<Client> {
-  const config: Config = {
-    root,
-    adrDir: 'docs/adr',
-    ticketsDir: 'tickets',
-    maxFileKb: 256,
-    allowWrite: false,
-    ...overrides,
-  };
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await createServer(config).connect(serverTransport);
-  const client = new Client({ name: 'test', version: '0.0.0' });
-  await client.connect(clientTransport);
-  return client;
-}
-
-async function call(
-  root: string,
-  name: string,
-  args: Record<string, unknown> = {},
-  overrides: Partial<Config> = {},
-): Promise<CallToolResult> {
-  const client = await connect(root, overrides);
-  try {
-    return (await client.callTool({ name, arguments: args })) as CallToolResult;
-  } finally {
-    await client.close();
-  }
-}
-
-function text(result: CallToolResult): string {
-  return (result.content[0] as { text: string }).text;
-}
+const { stderr, logLines } = captureIo();
 
 const adr = (title: string, status: string, decision = 'We do it.') =>
   `# ${title}\n\n- Status: ${status}\n- Date: 2026-01-01\n\n## Context\n\nWhy.\n\n` +
@@ -265,7 +199,7 @@ describe('list_adrs', () => {
     expect(audit).toEqual([
       expect.objectContaining({ event: 'tool_call', tool: 'list_adrs', ok: true }),
     ]);
-    expect(stderr.join('')).not.toContain('needle-status');
+    expect(stderr()).not.toContain('needle-status');
   });
 });
 
@@ -431,13 +365,8 @@ describe('ADR parsing', () => {
 });
 
 describe('adr:// resource', () => {
-  async function withClient<T>(root: string, run: (client: Client) => Promise<T>, maxFileKb = 256) {
-    const client = await connect(root, { maxFileKb });
-    try {
-      return await run(client);
-    } finally {
-      await client.close();
-    }
+  function withClient<T>(root: string, run: (client: Client) => Promise<T>, maxFileKb = 256) {
+    return withClientFor(root, run, { maxFileKb });
   }
 
   it('returns the raw markdown of demo ADR 0002 (AC10)', async () => {
@@ -487,12 +416,8 @@ describe('adr:// resource', () => {
   it('lists every readable ADR with its title', async () => {
     const { resources } = await withClient(DEMO, (client) => client.listResources());
 
-    expect(resources.map((resource) => resource.uri)).toEqual([
-      'adr://0001',
-      'adr://0002',
-      'adr://0003',
-      'adr://0004',
-    ]);
+    const uris = resources.map((resource) => resource.uri).filter((uri) => uri.startsWith('adr:'));
+    expect(uris).toEqual(['adr://0001', 'adr://0002', 'adr://0003', 'adr://0004']);
     // The SDK adds the template's description to every entry.
     expect(resources[1]).toMatchObject({
       uri: 'adr://0002',

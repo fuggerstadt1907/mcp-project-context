@@ -26,11 +26,11 @@ The agent can find the ticket it works on and read its acceptance criteria.
 
 ## Acceptance criteria
 
-- [ ] Filters combine (status AND label); `status: "TODO", label: "api"` returns only T-003.
-- [ ] A ticket without frontmatter, without `id`, or with frontmatter outside the subset is
+- [x] Filters combine (status AND label); `status: "TODO", label: "api"` returns only T-003.
+- [x] A ticket without frontmatter, without `id`, or with frontmatter outside the subset is
       skipped and logged as a warning, not a crash.
-- [ ] All four demo tickets parse without warnings.
-- [ ] Tests for filename/id mismatch and duplicate ids.
-- [ ] Parser tests: quoted values with `:` and `,`, `[]`, a block list (skipped).
-- [ ] Personal data in the demo tickets (email, phone) comes back redacted.
-- [ ] Tests via `InMemoryTransport` + `Client`.
+- [x] All four demo tickets parse without warnings.
+- [x] Tests for filename/id mismatch and duplicate ids.
+- [x] Parser tests: quoted values with `:` and `,`, `[]`, a block list (skipped).
+- [x] Personal data in the demo tickets (email, phone) comes back redacted.
+- [x] Tests via `InMemoryTransport` + `Client`.

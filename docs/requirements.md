@@ -146,7 +146,7 @@ No database. The data model is the parsed markdown.
   context: string; decision: string; consequences: string }
 ```
 
-**Ticket** (`<tickets-dir>/*.md`):
+**Ticket** (`<tickets-dir>/**/*.md`, `README.md` ignored, id `[A-Za-z0-9._-]+`):
 
 ```ts
 { id: string; title: string; status: string; labels: string[];
@@ -225,7 +225,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 03 Redaction | NFR-3 | done · 2026-11-16 · ticket-03-redaction |
 | 04 Result helper and audit | FR-10, NFR-6 | done · 2026-11-16 · ticket-04-result-helper-audit |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | done · 2026-11-16 · ticket-05-adr-tools |
-| 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
+| 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | done · 2026-11-16 · ticket-06-ticket-tools |
 | 05b ADR format variants (#16) | FR-14, FR-17 | open |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
 | 08 Write tool | FR-9, NFR-4 | open |
@@ -329,6 +329,13 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 63 | Status, date and sections | `Status`/`Date` bullets (`-`, `*`, `+`, bold allowed) count only before the first `##` heading, and an empty value counts as missing. A section runs to the next heading of level 1 or 2, so `###` stays inside it. Headings in code fences are ignored. Warnings fire on every call that reads the file. | A bullet in Consequences is not the ADR's status. Logging once per process would need state the sources must not hold (ADR 0004). |
 | 64 | Resource list | `adr://{id}` lists readable ADRs with name `ADR 0002` and the title. `withResourceList` in `result.ts` redacts uri, name and title and rethrows errors with a redacted message. It writes no audit line. | Titles come from file content and would otherwise reach the client unredacted. A listing is not a read (NFR-6). |
 | 65 | ADRs in other formats | Supported: status and date from a bullet, a Nygard `## Status` section or MADR 3 frontmatter, and a `1.` title prefix is stripped. New stage 05b after ticket 06, which brings the frontmatter parser. Decided by the user after the ticket 05 review. | Common real-world ADRs would otherwise all show status `Unknown`. |
+| 66 | Text content of the ticket tools | Compact markdown like decision 58. `list_tickets`: one line `T-003  Title  (status · label, label)` per ticket, then the skip line. `get_ticket`: `# id: title`, `Status: … · Labels: …`, the description, then `## Acceptance criteria` as a `- [ ]`/`- [x]` list, `(none)` if empty. Confirmed by the user. | Same style as the ADR tools, same data as `structuredContent`. |
+| 67 | Which files are tickets | Every `.md` under `--tickets-dir`, recursively (AC15 uses `a/x.md`). Files named `README.md` (any case) are ignored silently. Any other file that cannot be used is counted as skipped: `no frontmatter`, `invalid frontmatter`, `missing id`, `invalid id`, or a safe-fs reason. Confirmed by the user. | A README is not a ticket. Any other file there was probably meant to be one, so the agent should know it was left out. |
+| 68 | `get_ticket` on a skipped file | The id of a skipped file is unknown, so the filename id (`T-012` from `T-012-login.md`) stands in. `get_ticket` with that id returns a tool error with the reason, and the id appears in "Available ids". A parsed ticket with the same id wins. `ticket://` on a parse-skipped file is not found; a file that cannot be read keeps its SafeFsError. Confirmed by the user. | FR-15 asks for the reason, and the frontmatter of a too-large file cannot be read. |
+| 69 | Allowed ticket id characters | `[A-Za-z0-9._-]+`. Any other id skips the ticket as `invalid id` with a warning. Decided by the user after the review. | The SDK does not decode `%`-escapes in template variables, so `id: a/b` or `id: T 2` produced `ticket://` URIs that could not be read back. Found in review. |
+| 70 | Matching, sorting and the mismatch warning | Ids and filters are compared case-insensitively after trimming. The list is sorted by id with digit runs compared by value (`T-2` before `T-10`). The filename warning fires only if the filename starts with an id-like prefix (`[A-Za-z]+-\d+`) that differs from the frontmatter id. Duplicates are warned about but not counted as skipped (as for ADRs). An empty filter is no filter (decision 62). Decided by the agent under rule 7. | Agents guess casing. Files named `login.md` would otherwise warn on every call. |
+| 71 | Frontmatter details | `labels: api` (a plain value) becomes one label, `labels:` none. An array for `id`, `title` or `status` is invalid. Double quotes unescape `\"` and `\\` only; single quotes unescape `''`. Blank lines are allowed; comments, duplicate keys, trailing commas, ` #` and an unquoted `: ` in a plain value are outside the subset. A `__proto__` key is an ordinary key. Warnings give the line number and a fixed problem text, never content. Decided by the agent under rule 7. | Stays a strict subset of YAML: anything YAML would read differently is rejected. stderr is not redacted. |
+| 72 | Acceptance criteria and description | The first `## Acceptance criteria` heading (any case, outside code fences) opens the section; it runs to the next heading of level 1 or 2. Only `- [ ]`/`- [x]` items count (`*`, `+` and `[X]` too). Indented lines below an item continue it, so a plain sub-bullet is appended to its parent. Items inside a code fence are ignored. The description is the body without that section. Decided by the agent under rule 7; the fence rule was found in review. | Matches the demo tickets and the template. Fenced examples are not criteria. |
 
 ## Open points
 
@@ -343,14 +350,15 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (`https://token@host` is masked as an email instead), and phone formats with parentheses or
   without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
   (decision 46).
-- Ticket 06: output schemas follow decision 56, and sources do not put ids into exception messages
-  (decision 52). The architecture test now checks `withAudit`, `withResourceAudit` and
-  `withResourceList` (done in ticket 05).
 - Ticket 05b: precedence of the status sources, whole `Superseded by …` line or first word, and
   frontmatter outside the subset. Listed in the ticket; resolve with grill-ticket before it starts.
 - Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
   reports as missing. This is CommonMark behaviour; kept.
 - Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
   for calls the SDK rejects early (decision 57) needs a fix.
+- Ticket 05b: reuse `src/sources/frontmatter.ts` for MADR 3 frontmatter. Decide whether an ADR
+  with frontmatter outside the subset is skipped (as tickets are) or listed with status `Unknown`.
+- Ticket 10: README documents the frontmatter subset, the allowed ticket id characters
+  (decision 69) and that `README.md` files under `--tickets-dir` are ignored.
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.

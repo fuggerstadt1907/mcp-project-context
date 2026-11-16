@@ -2,6 +2,7 @@
 // drafts/, other subdirectories and files like README.md are ignored. Read on every call (ADR 0004).
 import { type SafeFs, SafeFsError, type SafeFsReason } from '../fs/safe-fs.js';
 import { log } from '../log.js';
+import { findHeadings } from './markdown.js';
 
 export interface Adr {
   id: string;
@@ -189,37 +190,6 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
     decision: sections.decision ?? '',
     consequences: sections.consequences ?? '',
   };
-}
-
-interface Heading {
-  line: number;
-  level: number;
-  text: string;
-}
-
-// ATX headings outside fenced code blocks, so a `## Decision` inside a code sample is not a section.
-function findHeadings(lines: string[]): Heading[] {
-  const headings: Heading[] = [];
-  let fence: string | undefined;
-  for (const [line, content] of lines.entries()) {
-    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(content);
-    if (fenceMatch) {
-      const marker = fenceMatch[1] as string;
-      if (fence === undefined) fence = marker;
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
-      continue;
-    }
-    if (fence !== undefined) continue;
-    const match = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(content);
-    if (match) {
-      headings.push({
-        line,
-        level: (match[1] as string).length,
-        text: (match[2] as string).trim(),
-      });
-    }
-  }
-  return headings;
 }
 
 // `- Status: Accepted`, also with `*` or `+` bullets and `**Status**:` in bold.
