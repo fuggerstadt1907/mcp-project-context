@@ -21,7 +21,12 @@ describe('createServer', () => {
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name)).toEqual(['list_adrs', 'get_adr']);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'list_adrs',
+      'get_adr',
+      'list_tickets',
+      'get_ticket',
+    ]);
     await client.close();
   });
 });
