@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 6 / 10 |
-| Total time | 3,42 h |
+| Total time | 4,42 h |
 | Questions the agent asked before coding | 45 |
 | Agent mistakes caught in review | 31 |
 | Test coverage (src) | – |
@@ -265,7 +265,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 06 – Ticket tools and resource (2026-11-16)
 
-- Time: TODO
+- Time: 1 h
 - Skills used: implement-ticket, review subagent
 - Questions the agent asked before coding (one round, the user chose the recommended option for all):
   - Text content format of `list_tickets` and `get_ticket`: compact markdown like the ADR tools
