@@ -17,16 +17,25 @@ type ToolResult = CallToolResult & { content: [TextBlock] };
 // treats a result that is missing here as unredacted.
 const redactionCounts = new WeakMap<object, number>();
 
+function redactText(value: string, counter: { count: number }): string {
+  const { text, findings } = redact(value);
+  counter.count += findings.length;
+  return text;
+}
+
+// Expects JSON data. Keys are redacted too, because a source may build them from content
+// (counts per assignee). The copy is frozen so a handler cannot put raw text back after ok().
 function redactDeep(value: unknown, counter: { count: number }): unknown {
-  if (typeof value === 'string') {
-    const { text, findings } = redact(value);
-    counter.count += findings.length;
-    return text;
-  }
-  if (Array.isArray(value)) return value.map((item) => redactDeep(item, counter));
+  if (typeof value === 'string') return redactText(value, counter);
+  if (Array.isArray(value)) return Object.freeze(value.map((item) => redactDeep(item, counter)));
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, redactDeep(item, counter)]),
+    return Object.freeze(
+      Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          redactText(key, counter),
+          redactDeep(item, counter),
+        ]),
+      ),
     );
   }
   return value;
@@ -38,22 +47,22 @@ export function ok<T extends Record<string, unknown>>(
   text: string,
 ): ToolResult & { structuredContent: T } {
   const counter = { count: 0 };
-  const result = {
-    content: [{ type: 'text', text: redactDeep(text, counter) as string }] satisfies [TextBlock],
+  const result = Object.freeze({
+    content: redactDeep([{ type: 'text', text }], counter) as [TextBlock],
     structuredContent: redactDeep(structured, counter) as T,
-  };
+  });
   redactionCounts.set(result, counter.count);
   return result;
 }
 
 /** Tool error the agent can act on. The message is redacted like any other output. */
 export function fail(message: string): ToolResult & { isError: true } {
-  const { text, findings } = redact(message);
-  const result = {
+  const counter = { count: 0 };
+  const result = Object.freeze({
     isError: true as const,
-    content: [{ type: 'text', text }] satisfies [TextBlock],
-  };
-  redactionCounts.set(result, findings.length);
+    content: redactDeep([{ type: 'text', text: message }], counter) as [TextBlock],
+  });
+  redactionCounts.set(result, counter.count);
   return result;
 }
 
@@ -115,11 +124,15 @@ export function withResourceAudit<Args extends [URL, ...unknown[]]>(
     let failure: Error | undefined;
     try {
       const raw = await read(...args);
+      // Built field by field so nothing unredacted (such as _meta) passes through.
       result = {
-        ...raw,
         contents: raw.contents.map((entry) => {
           if (!('text' in entry)) throw new Error('binary resource contents are not supported');
-          return { ...entry, text: redactDeep(entry.text, counter) as string };
+          return {
+            uri: redactText(entry.uri, counter),
+            ...(entry.mimeType === undefined ? {} : { mimeType: entry.mimeType }),
+            text: redactText(entry.text, counter),
+          };
         }),
       };
     } catch (error) {

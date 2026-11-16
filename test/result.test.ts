@@ -113,6 +113,22 @@ describe('ok', () => {
     expect(auditLines()).toEqual([expect.objectContaining({ redactions: 2 })]);
   });
 
+  it('redacts object keys and counts them', () => {
+    const result = ok({ byAssignee: { 'jane@example.com': 3 } }, 'counts');
+    expect(result.structuredContent).toEqual({ byAssignee: { '[REDACTED:email]': 3 } });
+  });
+
+  it('returns a frozen result, so raw text cannot be put back after ok()', async () => {
+    const result = await callProbe(() => {
+      const built = ok({ note: 'safe', nested: { items: [] } }, 'safe');
+      (built.content[0] as { text: string }).text = `raw ${TOKEN}`;
+      return built;
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(TOKEN);
+  });
+
   it('leaves numbers, booleans and null unchanged', () => {
     const result = ok({ n: 1, b: true, z: null, s: 'x' }, 'x');
     expect(result.structuredContent).toEqual({ n: 1, b: true, z: null, s: 'x' });
@@ -141,6 +157,17 @@ describe('withAudit', () => {
       { type: 'text', text: 'Path is outside the project root: ../outside.md' },
     ]);
     expect(auditLines()).toEqual([expect.objectContaining({ tool: 'probe', ok: false })]);
+  });
+
+  it('redacts a SafeFsError message and counts the redaction', async () => {
+    const result = await callProbe(() => {
+      throw new SafeFsError('denied', '.env', `Path is on the deny list: ${TOKEN}`);
+    });
+
+    expect(result.content).toEqual([
+      { type: 'text', text: 'Path is on the deny list: [REDACTED:github_token]' },
+    ]);
+    expect(auditLines()).toEqual([expect.objectContaining({ ok: false, redactions: 1 })]);
   });
 
   it('turns any other exception into a generic tool error without its message', async () => {
@@ -182,6 +209,8 @@ describe('withAudit', () => {
     );
     expect(audit[0]).toMatchObject({ event: 'tool_call', tool: 'probe', ok: true, redactions: 0 });
     expect(audit[0]?.bytes).toBeGreaterThan(0);
+    expect(Number.isInteger(audit[0]?.ms)).toBe(true);
+    expect(audit[0]?.ms).toBeGreaterThanOrEqual(0);
     expect(stderr.join('')).not.toContain('needle-value-123');
     expect(stderr.join('')).not.toContain('content-marker');
   });
@@ -236,5 +265,39 @@ describe('withResourceAudit', () => {
     });
 
     await expect(read).rejects.toThrow('Path is on the deny list: .env [REDACTED:github_token]');
+    expect(auditLines()).toEqual([expect.objectContaining({ ok: false })]);
+  });
+
+  async function readRaw(contents: unknown[]): Promise<unknown> {
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    server.registerResource(
+      'adr',
+      new ResourceTemplate('adr://{id}', { list: undefined }),
+      {},
+      withResourceAudit('adr', async () => ({ contents }) as never),
+    );
+    const client = await connect(server);
+    try {
+      return await client.readResource({ uri: 'adr://0001' });
+    } finally {
+      await client.close();
+    }
+  }
+
+  it('rejects binary contents and audits ok: false', async () => {
+    await expect(readRaw([{ uri: 'adr://0001', blob: 'AAAA' }])).rejects.toThrow(
+      'Internal error in adr resource',
+    );
+    expect(auditLines()).toEqual([expect.objectContaining({ ok: false })]);
+  });
+
+  it('drops _meta and redacts the uri of each entry', async () => {
+    const result = await readRaw([
+      { uri: 'adr://jane@example.com', mimeType: 'text/markdown', text: 'x', _meta: { k: TOKEN } },
+    ]);
+
+    expect(result).toEqual({
+      contents: [{ uri: 'adr://[REDACTED:email]', mimeType: 'text/markdown', text: 'x' }],
+    });
   });
 });
