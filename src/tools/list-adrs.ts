@@ -33,7 +33,8 @@ export function registerListAdrs(server: McpServer, adrs: AdrSource, adrDir: str
     },
     withAudit('list_adrs', async ({ status }: { status?: string | undefined }) => {
       const listing = await adrs.list();
-      const wanted = status?.trim().toLowerCase();
+      // An empty status is no filter: agents sometimes send optional fields as "".
+      const wanted = status?.trim().toLowerCase() || undefined;
       const matches = listing.adrs
         .filter((adr) => wanted === undefined || adr.status.toLowerCase() === wanted)
         .map(({ id, title, status, date }) => ({ id, title, status, date }));

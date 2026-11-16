@@ -30,7 +30,7 @@ export interface AdrListing {
 export type AdrLookup =
   | { found: true; adr: Adr; raw: string }
   // Unknown or malformed id. `available` holds every ADR id on disk, including skipped files.
-  | { found: false; available: string[] }
+  | { found: false; available: string[]; missingDir: boolean }
   // The file exists but cannot be read (too large, unreadable).
   | { found: false; available: string[]; error: SafeFsError };
 
@@ -109,11 +109,11 @@ export function createAdrSource(safeFs: SafeFs, adrDir: string): AdrSource {
   }
 
   async function get(input: string): Promise<AdrLookup> {
-    const { files: adrFiles } = await files();
+    const { files: adrFiles, missingDir } = await files();
     const available = adrFiles.map((file) => file.id);
     const id = normalizeAdrId(input);
     const file = adrFiles.find((candidate) => candidate.id === id);
-    if (!file) return { found: false, available };
+    if (!file) return { found: false, available, missingDir };
     try {
       return { found: true, ...(await read(file)) };
     } catch (error) {

@@ -8,7 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as z from 'zod/v4';
 import { createSafeFs, SafeFsError } from '../src/fs/safe-fs.js';
-import { fail, ok, withAudit, withResourceAudit } from '../src/tools/result.js';
+import { fail, ok, withAudit, withResourceAudit, withResourceList } from '../src/tools/result.js';
 
 // Fake tokens are joined at runtime so secret scanners on push do not flag the test file.
 const fake = (...parts: string[]) => parts.join('');
@@ -299,5 +299,24 @@ describe('withResourceAudit', () => {
     expect(result).toEqual({
       contents: [{ uri: 'adr://[REDACTED:email]', mimeType: 'text/markdown', text: 'x' }],
     });
+  });
+});
+
+describe('withResourceList', () => {
+  it('redacts the message of a SafeFsError', async () => {
+    const list = withResourceList(() => {
+      throw new SafeFsError('unreadable', 'x', `File cannot be read: ${TOKEN}`);
+    });
+    await expect(list()).rejects.toThrow('File cannot be read: [REDACTED:github_token]');
+  });
+
+  it('replaces any other error with a generic message', async () => {
+    const list = withResourceList(() => {
+      throw new Error(`boom /Users/someone ${TOKEN}`);
+    });
+    await expect(list()).rejects.toThrow(
+      'Internal error in resource list. Try again or report it.',
+    );
+    expect(stderr.join('')).not.toContain(TOKEN);
   });
 });

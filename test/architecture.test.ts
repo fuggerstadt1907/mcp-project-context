@@ -60,12 +60,16 @@ describe('architecture', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('every resource file wraps its read callback in withResourceAudit', () => {
+  it('every resource file wraps its read and list callbacks', () => {
     const offenders = readdirSync(join(SRC, 'resources'))
       .filter((name) => name.endsWith('.ts'))
       .filter((name) => {
         const source = readFileSync(join(SRC, 'resources', name), 'utf8');
-        return !/\bwithResourceAudit\(/.test(source) || !/\bwithResourceList\(/.test(source);
+        const hasList = /\blist:\s*(?!undefined)/.test(source);
+        return (
+          !/\bwithResourceAudit\(/.test(source) ||
+          (hasList && !/\blist:\s*withResourceList\(/.test(source))
+        );
       });
     expect(offenders).toEqual([]);
   });

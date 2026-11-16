@@ -39,7 +39,13 @@ export function registerGetAdr(
       if (!lookup.found) {
         if ('error' in lookup) {
           return fail(
-            `ADR ${id} cannot be read: ${reasonText(lookup.error.reason, options.maxFileKb)}.`,
+            `ADR "${id}" cannot be read: ${reasonText(lookup.error.reason, options.maxFileKb)}.`,
+          );
+        }
+        if (lookup.missingDir) {
+          return fail(
+            `ADR "${id}" not found. ADR directory not found: ${options.adrDir}. ` +
+              'Set --adr-dir if your ADRs live elsewhere.',
           );
         }
         if (lookup.available.length === 0) {

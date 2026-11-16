@@ -154,14 +154,22 @@ export function withResourceAudit<Args extends [URL, ...unknown[]]>(
 /**
  * Wraps a resource template's `list` callback. Names and titles come from file content, so every
  * entry is rebuilt from `uri`, `name`, `title`, `description` and `mimeType`, with text redacted.
- * A listing is not a read, so it writes no audit line.
+ * Errors are rethrown with a redacted message, as in withResourceAudit. A listing is not a read,
+ * so it writes no audit line.
  */
 export function withResourceList<Args extends unknown[]>(
   list: (...args: Args) => ListResourcesResult | Promise<ListResourcesResult>,
 ): (...args: Args) => Promise<ListResourcesResult> {
   return async (...args) => {
     const counter = { count: 0 };
-    const raw = await list(...args);
+    let raw: ListResourcesResult;
+    try {
+      raw = await list(...args);
+    } catch (error) {
+      throw error instanceof SafeFsError
+        ? new Error(redact(error.message).text)
+        : new Error(internalError('resource list', error));
+    }
     return {
       resources: raw.resources.map((resource) => ({
         uri: redactText(resource.uri, counter),

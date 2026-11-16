@@ -142,6 +142,11 @@ describe('list_adrs', () => {
     },
   );
 
+  it.each(['', '  '])('treats status %j as no filter', async (status) => {
+    const result = await call(DEMO, 'list_adrs', { status });
+    expect((result.structuredContent as { adrs: unknown[] }).adrs).toHaveLength(4);
+  });
+
   it('matches the status exactly, not as a substring', async () => {
     const result = await call(DEMO, 'list_adrs', { status: 'accept' });
 
@@ -331,12 +336,21 @@ describe('get_adr', () => {
 
     expect(result.isError).toBe(true);
     expect(text(result)).toBe(
-      'ADR 2 cannot be read: the file is larger than --max-file-kb (1 KB).',
+      'ADR "2" cannot be read: the file is larger than --max-file-kb (1 KB).',
+    );
+  });
+
+  it('names --adr-dir when the ADR directory is missing', async () => {
+    const root = tempRoot({ 'README.md': '# x\n' });
+    const result = await call(root, 'get_adr', { id: '1' });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe(
+      'ADR "1" not found. ADR directory not found: docs/adr. Set --adr-dir if your ADRs live elsewhere.',
     );
   });
 
   it('returns a tool error when there are no ADRs', async () => {
-    const root = tempRoot({ 'README.md': '# x\n' });
+    const root = tempRoot({ 'docs/adr/README.md': '# x\n' });
     const result = await call(root, 'get_adr', { id: '1' });
     expect(result.isError).toBe(true);
     expect(text(result)).toBe('ADR "1" not found. There are no ADRs in docs/adr.');
