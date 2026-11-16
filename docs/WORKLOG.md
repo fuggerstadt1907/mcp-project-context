@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 3 / 10 |
-| Total time | 1,25 h |
+| Total time | 1,75 h |
 | Questions the agent asked before coding | 35 |
 | Agent mistakes caught in review | 19 |
 | Test coverage (src) | – |
@@ -121,7 +121,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 03 – Redaction (2026-11-16)
 
-- Time: <X> min agent + <Y> min review
+- Time: 20 min agent + 10 min review
 - Skills used: implement-ticket, review subagent
 - Questions the agent asked before coding (the user chose the recommended option for all four):
   - What `Finding.index` refers to: the offset in the original text.
@@ -171,7 +171,7 @@ Be honest: mistakes caught in review are the most valuable part.
     for README Limitations.
   - Coverage, because `@vitest/coverage-v8` is not installed.
   - A CI run, which needs a push.
-- PR: TODO
+- PR: #14
 
 ## Skill improvements
 
