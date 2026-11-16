@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 0 / 10 |
-| Total time | 0.75 h |
+| Total time | TODO |
 | Questions the agent asked before coding | 24 |
 | Agent mistakes caught in review | 0 |
 | Test coverage (src) | – |
@@ -56,3 +56,44 @@ Be honest: mistakes caught in review are the most valuable part.
     review: fixed order `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`
     (requirements decision 21, ticket 07).
 - PR: none, docs committed directly to main
+
+### Ticket 01 – Server skeleton and CLI (2026-11-16)
+
+- Time: 10 min
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding:
+  - Where `--help`/`--version` print: stderr, so "never stdout" has no exception.
+  - One commit per stage (skill) or small commits (CLAUDE.md): small commits.
+  - How `config.ts` checks paths before safe-fs exists: `node:fs` directly, as a documented
+    exception in CLAUDE.md; ticket 02 extracts the check.
+- Decisions made (and where recorded):
+  - Decisions 22 to 26 in `docs/requirements.md`; CLAUDE.md exception; extraction note in ticket 02.
+- Mistakes caught in review:
+  - The agent's first `listTools()` design would have failed: an `McpServer` without tools does
+    not answer `tools/list` unless it declares `capabilities: { tools: {} }`. Caught by reading
+    the SDK before writing the test, not in review.
+  - The agent caught its own gap: a dangling symlink as source dir passed as "missing, warn".
+    It now exits with 2.
+  - Review subagent: ENOTDIR/EACCES while checking a source dir crashed with a stack trace and
+    exit 1 instead of exit 2. Fixed with a try/catch and a test.
+  - Review subagent: the prefix check `root + sep` rejected every source dir for `--root /`.
+    Replaced with a `path.relative` check; tests for `/` and a dir named `..tickets`.
+  - Review subagent: an empty `--adr-dir` gave zod's generic message. It now names the flag.
+- Tested: 34 vitest tests (config with temp dirs and symlinks, CLI spawned via tsx for exit
+  codes and stdout silence, `listTools()` via InMemoryTransport). Manually: `node dist/cli.js`
+  without `--root` (exit 2), and `initialize` plus `tools/list` piped into the built CLI. stdout
+  carried only JSON-RPC, stderr only JSON lines.
+- Not tested: CI run (needs a push), Windows paths.
+- PR: #12
+
+## Skill improvements
+
+### 2026-11-16 · implement-ticket, first real run (ticket 01)
+- Observed: skill refused `docs/tickets/01-server-skeleton.md` because it only
+  accepts grill-ticket documents with a status line. Correct behaviour, but I
+  passed the wrong file.
+- Observed: /grill-ticket was missing from the skill list. Skills only load at
+  session start; /clear does not reload them.
+- Change idea: on refusal, suggest the matching requirements doc + Etappe
+  instead of offering only "skip precondition".
+- Change idea: map Etappe n → ticket file explicitly in the grill template.

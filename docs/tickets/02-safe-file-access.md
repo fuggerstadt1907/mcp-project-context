@@ -24,6 +24,10 @@ Rules, in this order:
 4. Only extensions `.md`, `.mdx`, `.txt`, `.yaml`, `.yml`, `.json`.
 5. Size limit `maxFileKb`.
 
+`src/config.ts` (ticket 01) already has an inside-root check for startup: realpath of the nearest
+existing ancestor, plus a broken-symlink check. Extract it into safe-fs and let `config.ts` reuse
+it, so there is one implementation of the root check.
+
 Throw a typed `SafeFsError` with a `reason` (`outside_root`, `denied`, `extension`, `too_large`,
 `not_found`). Tools turn it into a tool error later.
 
@@ -34,4 +38,5 @@ Throw a typed `SafeFsError` with a `reason` (`outside_root`, `denied`, `extensio
 - [ ] Positive test: nested markdown file inside root is read.
 - [ ] `listFiles` never returns denied files and does not follow symlinked directories outside root.
 - [ ] Tests build their fixtures in a temp dir (`fs.mkdtemp`), not in the repo.
-- [ ] No other module imports `node:fs` for reading (check in review).
+- [ ] No other module imports `node:fs` for reading (check in review). Exception: `src/config.ts`
+      for startup validation (CLAUDE.md), which reuses the extracted check.

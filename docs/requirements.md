@@ -217,19 +217,19 @@ The module layout in `docs/architecture.md` stays as it is. Decisions on top of 
 The tickets in `docs/tickets/` are the stages, one PR each, in the order of `docs/tickets/README.md`.
 Each ticket is testable on its own with `InMemoryTransport`.
 
-| Ticket | Covers |
-| --- | --- |
-| 01 Server skeleton | FR-1, FR-16 (startup part), NFR-5 |
-| 02 Safe file access | NFR-1, NFR-2 |
-| 03 Redaction | NFR-3 |
-| 04 Result helper and audit | FR-10, NFR-6 |
-| 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 |
-| 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 |
-| 07 Conventions and search | FR-6, FR-7, NFR-7 |
-| 08 Write tool | FR-9, NFR-4 |
-| 09 Integration tests | Goal, AC25, AC29 |
-| 10 README, demo, release | NFR-9, Goal (demo) |
-| 11 Stretch: GitHub Issues | Out of v0.1 scope |
+| Ticket | Covers | Status |
+| --- | --- | --- |
+| 01 Server skeleton | FR-1, FR-16 (startup part), NFR-5 | done · 2026-11-16 · ticket-01-server-skeleton |
+| 02 Safe file access | NFR-1, NFR-2 | open |
+| 03 Redaction | NFR-3 | open |
+| 04 Result helper and audit | FR-10, NFR-6 | open |
+| 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | open |
+| 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
+| 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
+| 08 Write tool | FR-9, NFR-4 | open |
+| 09 Integration tests | Goal, AC25, AC29 | open |
+| 10 README, demo, release | NFR-9, Goal (demo) | open |
+| 11 Stretch: GitHub Issues | Out of v0.1 scope | open |
 
 ## Rollout & release
 
@@ -283,6 +283,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 19 | Verifying the success criteria | Scripted e2e test plus a recorded demo. | Repeatable check plus a real-session proof. |
 | 20 | Separate ADRs for decisions | ADR 0004 (no cache) and 0005 (stderr audit). Ticket 11's ADR becomes 0006. | These close off features someone will propose again. |
 | 21 | Convention file order | Fixed: `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`. Missing files are skipped. | Team rules first, agent-specific rules after. |
+| 22 | Where do `--help` and `--version` print? | stderr, like everything else. | The "never stdout" rule stays absolute; Biome only allows `console.error`. |
+| 23 | Commits per stage | Several small commits, each passing `pnpm check`. | CLAUDE.md asks for small commits; it wins over the one-commit default of the implement skill. |
+| 24 | File access in `config.ts` before safe-fs exists | `config.ts` uses `node:fs` directly for startup validation (exception in CLAUDE.md). Ticket 02 extracts the inside-root check into safe-fs and `config.ts` reuses it. | safe-fs needs a validated root first. One implementation of the root check in the end. |
+| 25 | Source dir that cannot be checked (broken symlink, ENOTDIR, EACCES) | Exit code 2 with a message naming the flag. | Treated like a dir outside root: we cannot prove it is inside. |
+| 26 | Source dir equal to root (`--tickets-dir .`) | Allowed. | It is inside root; safe-fs deny rules still apply to what is read. |
 
 ## Open points
 

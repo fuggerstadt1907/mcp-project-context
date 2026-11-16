@@ -20,6 +20,8 @@ Read `docs/requirements.md` and `docs/architecture.md` before any change. Decisi
 
 - **Never write to stdout.** stdout carries the MCP protocol. Log only via `src/log.ts` (stderr).
 - **All file access goes through `src/fs/safe-fs.ts`.** No direct `fs` calls in tools or sources.
+  Exception: `src/config.ts` may use `node:fs` directly to validate root and source dirs at startup.
+  safe-fs needs a validated root first.
 - **All text returned to the client goes through `redact()`** at the output boundary, never earlier.
 - **Write tools are only registered when `--allow-write` is set.** Not registered means not listed.
 - No network access in the default configuration.
