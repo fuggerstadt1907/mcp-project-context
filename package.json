@@ -1,0 +1,53 @@
+{
+  "name": "mcp-project-context",
+  "version": "0.0.0",
+  "description": "MCP server that gives coding agents safe, read-only access to a repo's ADRs, tickets and conventions, with secret and PII redaction.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Alessandro Orlandi",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "coding-agents",
+    "adr"
+  ],
+  "bin": {
+    "mcp-project-context": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "tsup src/cli.ts --format esm --target node22 --clean",
+    "dev": "tsx src/cli.ts --root examples/demo-project",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "^22.20.5",
+    "tsup": "^9.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
