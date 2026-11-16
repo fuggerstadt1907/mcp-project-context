@@ -20,4 +20,4 @@ Work them in order. Each ticket is one PR. Create them as GitHub issues with
 Size: S ≈ 1–2 h, M ≈ 2–4 h with an agent, including review.
 
 Tickets 01–04 are the foundation. 05 and 06 can run in parallel.
-Some tickets reference open questions from `docs/requirements.md` §7. Resolve them first.
+Decisions behind the tickets are in the decision log of `docs/requirements.md`.

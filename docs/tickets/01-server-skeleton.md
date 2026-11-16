@@ -23,15 +23,15 @@ never touches stdout.
 
 ## Acceptance criteria
 
-- [ ] `pnpm dev` starts and waits for input without printing to stdout.
-- [ ] `node dist/cli.js` without `--root` exits with code 2 and a readable message.
-- [ ] `--root` pointing to a file or missing path exits with code 2.
-- [ ] `--tickets-dir ../other` or a symlinked dir pointing outside root exits with code 2.
-- [ ] A missing `--adr-dir` or `--tickets-dir` starts the server and logs a warning.
-- [ ] Test: `createServer` connected via `InMemoryTransport` answers `listTools()` with an empty list.
-- [ ] Test: config parsing (defaults, invalid values).
-- [ ] `pnpm check` and `pnpm build` pass.
-- [ ] Add `pnpm build` as the last step in `.github/workflows/ci.yml`.
+- [x] `pnpm dev` starts and waits for input without printing to stdout.
+- [x] `node dist/cli.js` without `--root` exits with code 2 and a readable message.
+- [x] `--root` pointing to a file or missing path exits with code 2.
+- [x] `--tickets-dir ../other` or a symlinked dir pointing outside root exits with code 2.
+- [x] A missing `--adr-dir` or `--tickets-dir` starts the server and logs a warning.
+- [x] Test: `createServer` connected via `InMemoryTransport` answers `listTools()` with an empty list.
+- [x] Test: config parsing (defaults, invalid values).
+- [x] `pnpm check` and `pnpm build` pass.
+- [x] Add `pnpm build` as the last step in `.github/workflows/ci.yml`.
 
 ## Notes
 
