@@ -263,6 +263,13 @@ Be honest: mistakes caught in review are the most valuable part.
   - Coverage, because `@vitest/coverage-v8` is not installed.
 - PR: #17
 
+### Dogfooding – first real use (2026-11-16)
+- Registered the server in its own repo (`claude mcp add`, local build).
+- Asked: "Which ADRs does this project have, and why is there no cache?"
+- Claude used list_adrs + get_adr (2 calls), found all 5 ADRs and explained
+  ADR 0004 without reading files itself.
+- Screenshot: docs/assets/dogfood-adr.png
+
 ## Skill improvements
 
 ### 2026-11-16 · implement-ticket, first real run (ticket 01)
