@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 2 / 10 |
+| Tickets done | 3 / 10 |
 | Total time | 1,25 h |
-| Questions the agent asked before coding | 31 |
-| Agent mistakes caught in review | 12 |
+| Questions the agent asked before coding | 35 |
+| Agent mistakes caught in review | 19 |
 | Test coverage (src) | – |
 
 ## Template
@@ -119,6 +119,57 @@ Be honest: mistakes caught in review are the most valuable part.
   Windows paths, CI run (needs a push).
 - PR: #13
 
+### Ticket 03 – Redaction (2026-11-16)
+
+- Time: TODO
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding (the user chose the recommended option for all four):
+  - What `Finding.index` refers to: the offset in the original text.
+  - How to catch `PAYMENT_API_KEY=sk_test_…` without a Stripe type: a broad `assignment` key match.
+  - Overlap of `token: ghp_…`: the specific type wins, and `assignment` skips redacted values.
+  - Plan, test points and branch: confirmed.
+- The user added CLAUDE.md rule 7 after these questions: the agent decides implementation details
+  and asks at most one round per stage. The review fixes below were decided under that rule.
+- Decisions made (and where recorded):
+  - Decisions 37 to 48 in `docs/requirements.md`; follow-ups and README limitations under Open
+    points; ticket 03 updated.
+- Mistakes caught in review:
+  - Leak: a quoted value with spaces (`password = "correct horse battery"`) or without a closing
+    quote was not masked at all. The value pattern stopped at whitespace and required the closing
+    quote. Now a quoted value runs to its quote or the end of the line.
+  - Partial leak: `token := abc` masked only `=` and showed `abc`. The same happened for `=>` and
+    `::`. These operators are now part of the pattern.
+  - Partial leak: `DB_PASSWORD=p@ss,word;x` stopped at the comma. Unquoted values now run to the
+    next whitespace.
+  - The value could cross a line break, so `## Password:` followed by a paragraph masked its first
+    word. The value must now be on the same line.
+  - Leak: a lowercase or dash-separated IBAN was missed. Part of it was then masked as a phone
+    number, and most digits stayed visible. IBANs now match in any case and with dashes.
+  - IBAN look-alikes (`US12 3456 7890 1234`) were masked. A mod-97 checksum now rejects them.
+  - Leak: a private key without its END line was not masked. It is now masked to the end of the text.
+- Mistakes the agent caught itself:
+  - The first email and `assignment` patterns were quadratic: 4–13 s for 100 KB inputs like
+    `a-a-a…`. A timing probe before the review found it. The patterns are now anchored and
+    bounded, and a test covers it.
+  - The first IBAN fix tried every prefix against the checksum. One prefix passed by chance and left
+    a digit visible. It now cuts only at group ends.
+  - A `git add -A` swept the user's uncommitted WORKLOG note into a feature commit. That commit was
+    redone without the note.
+- Tested: 143 vitest tests, 60 of them in `test/redact.test.ts`. They cover:
+  - every type with positive cases,
+  - the AC23 false positives plus ADR prose, a newline after a key name and IBAN look-alikes,
+  - multiple findings with offsets, overlap, idempotency, and the false positives kept on purpose,
+  - the demo fixtures: T-002 and CONVENTIONS.md are masked, all other demo files are unchanged,
+  - 100 KB timing tests, and a stdout/stderr spy.
+- Not tested:
+  - The path through tools and resources (AC22 "any tool or resource"), which comes in ticket 04
+    and ticket 09.
+  - Formats outside the ticket table (Bearer, URL credentials, `sk_live_`, more phone formats),
+    which are listed for README Limitations.
+  - Coverage, because `@vitest/coverage-v8` is not installed.
+  - A CI run, which needs a push.
+- PR: TODO
+
 ## Skill improvements
 
 ### 2026-11-16 · implement-ticket, first real run (ticket 01)
@@ -130,3 +181,8 @@ Be honest: mistakes caught in review are the most valuable part.
 - Change idea: on refusal, suggest the matching requirements doc + Etappe
   instead of offering only "skip precondition".
 - Change idea: map Etappe n → ticket file explicitly in the grill template.
+
+### 2026-11-16  · implement-ticket, redaction (ticket 03)
+- implement-ticket asks too many low-level questions (Finding.index, overlap handling).
+  Fix: CLAUDE.md rule 7 (agent decides details, asks only on scope/output/security/ADR conflicts).
+  Consider moving this rule into the skill itself.
