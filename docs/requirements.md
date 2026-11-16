@@ -221,7 +221,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | --- | --- | --- |
 | 01 Server skeleton | FR-1, FR-16 (startup part), NFR-5 | done · 2026-11-16 · ticket-01-server-skeleton |
 | 02 Safe file access | NFR-1, NFR-2 | done · 2026-11-16 · ticket-02-safe-file-access |
-| 03 Redaction | NFR-3 | open |
+| 03 Redaction | NFR-3 | done · 2026-11-16 · ticket-03-redaction |
 | 04 Result helper and audit | FR-10, NFR-6 | open |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | open |
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
@@ -298,6 +298,20 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 34 | Hard links to files outside root | Not caught, documented as a limitation. | Planting one needs write access to the repo, the same threat as a symlink, and realpath cannot see it. Rejecting `nlink > 1` would hit legitimate files. |
 | 35 | Race between check and read | The size limit is checked on the open handle and the read is capped. A symlink swapped in between check and open is documented, not caught. | The size part is cheap. Closing the symlink race needs `O_NOFOLLOW` per path segment and a local attacker writing at that moment. |
 | 36 | "No other module imports `node:fs`" | Enforced by `test/architecture.test.ts` (`safe-fs.ts` and `config.ts` allowed). | The test runs on every commit; a review check is easy to miss. |
+| 37 | What `Finding.index` refers to | The offset of the match in the original text. | Stable, independent of replacement lengths. Only the count is used so far (audit). |
+| 38 | Stripe-style keys like `PAYMENT_API_KEY=sk_test_…` | No extra type. `assignment` matches any key name that contains `api_key`, `access_key`, `secret`, `password`, `passwd`, `pwd` or `token`, with any prefix, case-insensitive, `=` or `:`. Only the value is masked. | Keeps the ticket's type table. Covers the demo fixture and `.env`-style lines. |
+| 39 | Overlapping matches (`token: ghp_…`) | Patterns run in a fixed order and the first one wins. Specific types come first and `assignment` comes last. A value that is already `[REDACTED:…]` is not masked again. | One finding per secret, with the more precise type. `redact()` is idempotent. |
+| 40 | Agent decisions vs. questions | CLAUDE.md rule 7: the agent decides implementation details and records them here. It asks only about scope, public output, security behaviour, conflicts with docs or ADRs, or decisions that are hard to undo. At most one round of questions per stage. | Ticket 03 raised too many low-level questions. |
+| 41 | Phone vs. IBAN, UUID, date | `iban` runs before `phone`. `phone` needs `+` and a country code, or a leading `0` and a separator, and must not touch a word character, `-` or `+`. | IBAN digit groups and UUID/date segments otherwise look like phone numbers. |
+| 42 | Regex runtime | Patterns with open-ended runs start only at the beginning of a run (lookbehind) and have bounded lengths (email local part ≤ 64). A test runs 100 KB adversarial inputs. | The first version took 4–13 s on 100 KB runs like `a-a-a…`. Files can be up to `--max-file-kb`. |
+| 43 | Fake tokens in tests | Joined from parts at runtime. | Secret scanning on push would otherwise flag the test file. |
+| 44 | AC22 "returned by any tool or resource" | Ticket 03 tests `redact()` on the T-002 fixture. The path through tools and resources is covered by ticket 04 (result helper) and ticket 09 (leak test). | ADR 0003: `redact()` is called in the result helper, which does not exist yet. |
+| 45 | Forms of an `assignment` value | Operators `=`, `:`, `:=`, `=>`, `::`, and the value must be on the same line. A quoted value runs to its closing quote, or to the end of the line if the quote is never closed. An unquoted value runs to the next whitespace, so `,` and `;` belong to it. | Found in review: quoted values with spaces, `token := x` and `p@ss,word` leaked whole or in part. |
+| 46 | False positives of the broad patterns | Kept, so the patterns fail closed (confirmed by the user): `Token: see below`, `tokens: 100`, numbers with a leading 0 like `0042 1234`, and `git@github.com:…` are masked. Tests pin this behaviour. | Masking too much costs readability. A leak costs a secret. Narrowing the key match (e.g. skipping digit values) would let `password: 123456` through. |
+| 47 | IBAN matching | Any letter case, groups split by spaces or dashes, or compact. Valid only if the mod-97 checksum holds. If the match runs into the next word, trailing groups are dropped until it holds, cutting only at group ends. | Found in review: a lowercase IBAN leaked as a partial phone match, and `US12 3456 7890 1234` was masked. A cut inside a group left one digit visible. |
+| 48 | Private key without an END line | Masked from `BEGIN` to the end of the text. | Pasted or truncated fragments must not leak. Found in review. |
+| 49 | `Authorization` headers and credentials in URLs | Two new types. `auth_header` masks the credential after `Bearer`/`Basic` (either case) if it is at least 8 characters with a digit. A JWT there keeps the `jwt` type. `url_credentials` masks `user:password` in `scheme://user:password@host` and runs before `email`. A URL without credentials stays unchanged. | Asked for by the user after the review. The digit rule keeps prose like "Basic authentication" readable. |
+| 50 | Limit of the regex timing tests | 2 s per 100 KB input (actual: a few ms). | Catastrophic backtracking shows up as seconds, not milliseconds. 2 s catches it without flaking on slow CI runners. |
 
 ## Open points
 
@@ -307,4 +321,10 @@ Each ticket is testable on its own with `InMemoryTransport`.
 - Follow-up (safe-fs): `--root` given in a different letter case than on disk keeps that spelling, so
   absolute symlinks inside root may be rejected as `outside_root`. Fails closed; `realpathSync.native`
   for root would fix it.
-- Follow-up (test): the architecture test does not catch `require('fs')`. Fine while the code is strict ESM.
+- Ticket 10: README Limitations must name what redaction does not catch: `sk_live_…` and `ASIA…`
+  keys, `Bearer`/`Basic` credentials without a digit, a user name alone in a URL
+  (`https://token@host` is masked as an email instead), and phone formats with parentheses or
+  without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
+  (decision 46).
+- Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
+  which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.
