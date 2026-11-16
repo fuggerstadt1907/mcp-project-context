@@ -220,7 +220,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | Ticket | Covers | Status |
 | --- | --- | --- |
 | 01 Server skeleton | FR-1, FR-16 (startup part), NFR-5 | done · 2026-11-16 · ticket-01-server-skeleton |
-| 02 Safe file access | NFR-1, NFR-2 | open |
+| 02 Safe file access | NFR-1, NFR-2 | done · 2026-11-16 · ticket-02-safe-file-access |
 | 03 Redaction | NFR-3 | open |
 | 04 Result helper and audit | FR-10, NFR-6 | open |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | open |
@@ -288,7 +288,23 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 24 | File access in `config.ts` before safe-fs exists | `config.ts` uses `node:fs` directly for startup validation (exception in CLAUDE.md). Ticket 02 extracts the inside-root check into safe-fs and `config.ts` reuses it. | safe-fs needs a validated root first. One implementation of the root check in the end. |
 | 25 | Source dir that cannot be checked (broken symlink, ENOTDIR, EACCES) | Exit code 2 with a message naming the flag. | Treated like a dir outside root: we cannot prove it is inside. |
 | 26 | Source dir equal to root (`--tickets-dir .`) | Allowed. | It is inside root; safe-fs deny rules still apply to what is read. |
+| 27 | Base for ticket 02 while PR #12 was open | Wait for the merge, then branch from `main`. No stacked PRs. | Each ticket PR stays reviewable against `main`. |
+| 28 | Symlinks and the deny/extension rules | Both rules run on the requested path and on the symlink target. | A link cannot turn `.env` into `notes.md` or a `.ts` file into a `.md` file. |
+| 29 | `listFiles` behaviour | Recursive, sorted, paths relative to root. Never enters symlinked directories. A symlinked file is kept only if its target passes every rule. Files over the size limit are listed. | No cycles, no escapes. FR-15 needs the oversized files to count them as skipped. |
+| 30 | Reasons for edge cases | Missing file or broken symlink inside root: `not_found`. Missing path outside root: `outside_root`. Missing `.env*`: `denied` (rules run before the existence check). NUL byte: `denied`. Root itself: `not_found`. `exists()` is false only for `not_found` and throws otherwise. It ignores the size limit. | The answer for a denied path does not reveal whether it exists. `exists()` cannot be used to probe denied paths. |
+| 31 | Letter case in the deny list | Compared case-insensitively. | macOS and Windows file systems treat `.GIT` as `.git`. Found in review. |
+| 32 | `.env*` as a directory name | Any path segment starting with `.env` is denied. | A Python venv named `.env/` stays closed. |
+| 33 | EACCES and other I/O errors | New reason `unreadable`, with a message that contains no host path. `listFiles` skips unreadable entries. | Node's messages contain absolute paths. The agent should see what happened. |
+| 34 | Hard links to files outside root | Not caught, documented as a limitation. | Planting one needs write access to the repo, the same threat as a symlink, and realpath cannot see it. Rejecting `nlink > 1` would hit legitimate files. |
+| 35 | Race between check and read | The size limit is checked on the open handle and the read is capped. A symlink swapped in between check and open is documented, not caught. | The size part is cheap. Closing the symlink race needs `O_NOFOLLOW` per path segment and a local attacker writing at that moment. |
+| 36 | "No other module imports `node:fs`" | Enforced by `test/architecture.test.ts` (`safe-fs.ts` and `config.ts` allowed). | The test runs on every commit; a review check is easy to miss. |
 
 ## Open points
 
-None.
+- Ticket 10: README Limitations must name hard links and the check/open symlink race (decisions 34, 35).
+- Follow-up (safe-fs): `listFiles` skips directory entries whose type the file system does not report
+  (`DT_UNKNOWN` on some network/FUSE mounts). Fall back to `lstat` if that ever matters.
+- Follow-up (safe-fs): `--root` given in a different letter case than on disk keeps that spelling, so
+  absolute symlinks inside root may be rejected as `outside_root`. Fails closed; `realpathSync.native`
+  for root would fix it.
+- Follow-up (test): the architecture test does not catch `require('fs')`. Fine while the code is strict ESM.
