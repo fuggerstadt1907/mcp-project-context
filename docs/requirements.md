@@ -307,10 +307,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 43 | Fake tokens in tests | Joined from parts at runtime. | Secret scanning on push would otherwise flag the test file. |
 | 44 | AC22 "returned by any tool or resource" | Ticket 03 tests `redact()` on the T-002 fixture. The path through tools and resources is covered by ticket 04 (result helper) and ticket 09 (leak test). | ADR 0003: `redact()` is called in the result helper, which does not exist yet. |
 | 45 | Forms of an `assignment` value | Operators `=`, `:`, `:=`, `=>`, `::`, and the value must be on the same line. A quoted value runs to its closing quote, or to the end of the line if the quote is never closed. An unquoted value runs to the next whitespace, so `,` and `;` belong to it. | Found in review: quoted values with spaces, `token := x` and `p@ss,word` leaked whole or in part. |
-| 46 | False positives of the broad patterns | Kept, so the patterns fail closed: `Token: see below`, `tokens: 100`, numbers with a leading 0 like `0042 1234`, and `git@github.com:…` are masked. Tests pin this behaviour. | Masking too much costs readability. A leak costs a secret. Narrowing the key match (e.g. skipping digit values) would let `password: 123456` through. |
+| 46 | False positives of the broad patterns | Kept, so the patterns fail closed (confirmed by the user): `Token: see below`, `tokens: 100`, numbers with a leading 0 like `0042 1234`, and `git@github.com:…` are masked. Tests pin this behaviour. | Masking too much costs readability. A leak costs a secret. Narrowing the key match (e.g. skipping digit values) would let `password: 123456` through. |
 | 47 | IBAN matching | Any letter case, groups split by spaces or dashes, or compact. Valid only if the mod-97 checksum holds. If the match runs into the next word, trailing groups are dropped until it holds, cutting only at group ends. | Found in review: a lowercase IBAN leaked as a partial phone match, and `US12 3456 7890 1234` was masked. A cut inside a group left one digit visible. |
 | 48 | Private key without an END line | Masked from `BEGIN` to the end of the text. | Pasted or truncated fragments must not leak. Found in review. |
 | 49 | `Authorization` headers and credentials in URLs | Two new types. `auth_header` masks the credential after `Bearer`/`Basic` (either case) if it is at least 8 characters with a digit. A JWT there keeps the `jwt` type. `url_credentials` masks `user:password` in `scheme://user:password@host` and runs before `email`. A URL without credentials stays unchanged. | Asked for by the user after the review. The digit rule keeps prose like "Basic authentication" readable. |
+| 50 | Limit of the regex timing tests | 2 s per 100 KB input (actual: a few ms). | Catastrophic backtracking shows up as seconds, not milliseconds. 2 s catches it without flaking on slow CI runners. |
 
 ## Open points
 
@@ -327,5 +328,3 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (decision 46).
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.
-- Follow-up (test): the 100 KB timing tests in `test/redact.test.ts` use a 500 ms limit, against
-  4–13 s before the fix. Raise the limit if they ever flake on a slow CI runner.

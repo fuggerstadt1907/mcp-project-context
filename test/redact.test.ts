@@ -201,7 +201,8 @@ describe('redact', () => {
     expect(redact(once)).toEqual({ text: once, findings: [] });
   });
 
-  // Unanchored or unbounded patterns made these take over 4 s each at 100 KB.
+  // Unanchored or unbounded patterns made these take over 4 s each at 100 KB. Catastrophic
+  // backtracking shows up as seconds, not milliseconds, so 2 s catches it without flaking on slow CI.
   it.each([
     ['a-a-a', 'a-'.repeat(50_000)],
     ['letters', 'a'.repeat(100_000)],
@@ -209,7 +210,7 @@ describe('redact', () => {
   ])('stays fast on a 100 KB run of %s', (_name, input) => {
     const start = performance.now();
     redact(input);
-    expect(performance.now() - start).toBeLessThan(500);
+    expect(performance.now() - start).toBeLessThan(2000);
   });
 
   it('writes nothing to stdout or stderr', () => {
