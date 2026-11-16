@@ -51,10 +51,32 @@ describe('redact', () => {
     ['phone', 'call 0821 123456 today', 'call [REDACTED:phone] today'],
     ['iban', 'IBAN DE89 3704 0044 0532 0130 00.', 'IBAN [REDACTED:iban].'],
     ['iban', 'IBAN DE89370400440532013000', 'IBAN [REDACTED:iban]'],
+    ['iban', 'iban de89 3704 0044 0532 0130 00', 'iban [REDACTED:iban]'],
+    ['iban', 'IBAN DE89-3704-0044-0532-0130-00 for rent', 'IBAN [REDACTED:iban] for rent'],
+    ['iban', 'GB29 NWBK 6016 1331 9268 19 paid', '[REDACTED:iban] paid'],
   ])('masks %s', (type, input, expected) => {
     const result = redact(input);
     expect(result.text).toBe(expected);
     expect(result.findings.map((f) => f.type)).toEqual([type]);
+  });
+
+  // Review findings: forms where the first version left all or part of the value visible.
+  it.each([
+    ['password = "correct horse battery"', 'password = "[REDACTED:assignment]"'],
+    ["password: 'two words'", "password: '[REDACTED:assignment]'"],
+    ['password: `abc def`', 'password: `[REDACTED:assignment]`'],
+    ['token="abc', 'token="[REDACTED:assignment]'],
+    ['token := abc', 'token := [REDACTED:assignment]'],
+    ['password => abc', 'password => [REDACTED:assignment]'],
+    ['pwd:: abc', 'pwd:: [REDACTED:assignment]'],
+    ['DB_PASSWORD=p@ss,word;x', 'DB_PASSWORD=[REDACTED:assignment]'],
+  ])('masks the whole assignment value in %s', (input, expected) => {
+    expect(redact(input).text).toBe(expected);
+  });
+
+  it('masks a private key without an END line up to the end of the text', () => {
+    const input = fake('-----BEGIN OPENSSH ', 'PRIVATE KEY-----\nb3BlbnNzaC1rZXk\ntruncated');
+    expect(redact(`key:\n${input}`).text).toBe('key:\n[REDACTED:private_key]');
   });
 
   it.each([
@@ -68,6 +90,8 @@ describe('redact', () => {
     ],
     ['prose about passwords', 'Password resets were 40 % of tickets. No password storage.'],
     ['an already redacted value', 'password: [REDACTED:email]'],
+    ['a key name followed by a line break', '## Password:\n\nUse the magic link.'],
+    ['IBAN-shaped text with a wrong checksum', 'HASH AB12CDEF1234567890 and US12 3456 7890 1234'],
   ])('leaves %s unchanged', (_name, input) => {
     expect(redact(input)).toEqual({ text: input, findings: [] });
   });
@@ -81,6 +105,16 @@ describe('redact', () => {
       { type: 'aws_key', index: 20 },
       { type: 'email', index: 47 },
     ]);
+  });
+
+  // Known false positives, kept on purpose: masking too much beats leaking (requirements decision 46).
+  it.each([
+    ['Token: see below', 'Token: [REDACTED:assignment] below'],
+    ['tokens: 100', 'tokens: [REDACTED:assignment]'],
+    ['Order 0042 1234', 'Order [REDACTED:phone]'],
+    ['git@github.com:org/repo.git', '[REDACTED:email]:org/repo.git'],
+  ])('masks %s (accepted false positive)', (input, expected) => {
+    expect(redact(input).text).toBe(expected);
   });
 
   it('prefers the specific type over assignment for the same value', () => {
