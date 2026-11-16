@@ -48,7 +48,7 @@ There are no roles or accounts. One server process serves one project root for o
 | FR-3 | `get_adr` returns one ADR split into title, status, date, context, decision, consequences. It accepts `"3"` and `"0003"`. |
 | FR-4 | `list_tickets` returns id, title, status, labels; optional status and label filters, combined with AND. |
 | FR-5 | `get_ticket` returns one ticket including description and acceptance criteria. |
-| FR-6 | `get_conventions` returns the content of each of `AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `CONTRIBUTING.md` that exists in root, in that order. |
+| FR-6 | `get_conventions` returns the content of each of `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md` that exists in root, in that fixed order. Missing files are skipped. |
 | FR-7 | `search_context` returns ranked matches with a short snippet and source reference. It searches the whole ticket (title, labels, description, acceptance criteria) with a bonus for title matches. ADR drafts are not searched. |
 | FR-8 | ADRs and tickets are available as resources `adr://{id}` and `ticket://{id}`. |
 | FR-9 | With `--allow-write`, `create_adr_draft` writes a new file to `<adr-dir>/drafts/` and never overwrites. The number is the highest number across `<adr-dir>` and `<adr-dir>/drafts/` plus one. |
@@ -82,7 +82,7 @@ There are no roles or accounts. One server process serves one project root for o
 - **AC4 (FR-3)** Given the demo project, when `get_adr` is called with `"2"`, then it returns ADR 0002 with the decision about magic links.
 - **AC5 (FR-4, FR-11)** Given the demo project, when `list_tickets` is called with `status: "TODO"` and `label: "api"`, then it returns only T-003.
 - **AC6 (FR-5)** Given the demo project, when `get_ticket` is called with `"T-003"`, then it returns four acceptance criteria, all with `done: false`.
-- **AC7 (FR-6)** Given a root with only `CONVENTIONS.md` and `AGENTS.md`, when `get_conventions` is called, then it returns those two files, `AGENTS.md` first.
+- **AC7 (FR-6)** Given a root with `AGENTS.md`, `CLAUDE.md` and `CONVENTIONS.md` but no `CONTRIBUTING.md`, when `get_conventions` is called, then it returns `CONVENTIONS.md`, `CLAUDE.md`, `AGENTS.md` in that order.
 - **AC8 (FR-7)** Given the demo project, when `search_context` is called with `"authentication"`, then ADR 0002 is the first result.
 - **AC9 (FR-7)** Given a ticket whose only match for `"429"` is in an acceptance criterion, when `search_context` is called with `"429"`, then that ticket is in the results.
 - **AC10 (FR-8)** Given the demo project, when `adr://0002` is read, then the raw markdown comes back redacted.
@@ -279,9 +279,10 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 15 | Missing source directory | Start, empty lists, hint. | One config for repos with only some sources. |
 | 16 | Source directory outside root | Exit code 2 at startup. | Fail early on misconfiguration. |
 | 17 | Skipped files | Omitted, warning on stderr, count with reason in the text; `get_*` on that id gives a tool error. | The agent knows the result is incomplete. |
-| 18 | AGENTS.md | Included as a fourth convention file, first in order. | Common place for agent rules. |
+| 18 | AGENTS.md | Included as a fourth convention file. | Common place for agent rules. |
 | 19 | Verifying the success criteria | Scripted e2e test plus a recorded demo. | Repeatable check plus a real-session proof. |
 | 20 | Separate ADRs for decisions | ADR 0004 (no cache) and 0005 (stderr audit). Ticket 11's ADR becomes 0006. | These close off features someone will propose again. |
+| 21 | Convention file order | Fixed: `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`. Missing files are skipped. | Team rules first, agent-specific rules after. |
 
 ## Open points
 

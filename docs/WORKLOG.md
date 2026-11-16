@@ -52,5 +52,7 @@ Be honest: mistakes caught in review are the most valuable part.
     subset to scalars and inline arrays and asked for it to be spelled out in the doc.
   - The agent proposed "status `Unknown`" for malformed ADRs, which contradicts ticket 05
     ("missing fields are empty strings"). It flagged this itself and updated ticket 05.
-  - The agent put `AGENTS.md` first in the convention order without asking. Open for review.
+  - The agent put `AGENTS.md` first in the convention order without asking. Resolved after
+    review: fixed order `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`
+    (requirements decision 21, ticket 07).
 - PR: none, docs committed directly to main

@@ -8,8 +8,9 @@ The agent can read the team's rules and search across all project knowledge.
 
 ## Scope
 
-- `src/sources/conventions.ts`: load `AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `CONTRIBUTING.md`
-  from root if they exist, in that order (requirements decision 18).
+- `src/sources/conventions.ts`: load `CONVENTIONS.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`
+  from root in that fixed order: team rules first, agent-specific rules after (requirements
+  decisions 18 and 21). Missing files are skipped.
 - Tool `get_conventions` — output `{ files: { path, content }[] }`.
 - `src/search.ts` + tool `search_context` — input `{ query: string, kinds?: ('adr'|'ticket'|'convention')[], limit?: number (default 10, max 50) }`.
   Output `{ results: { kind, id, title, score, snippet }[] }`.
@@ -21,6 +22,8 @@ The agent can read the team's rules and search across all project knowledge.
 
 ## Acceptance criteria
 
+- [ ] `get_conventions` on a root with `AGENTS.md`, `CLAUDE.md` and `CONVENTIONS.md` (no
+      `CONTRIBUTING.md`) returns `CONVENTIONS.md`, `CLAUDE.md`, `AGENTS.md` in that order.
 - [ ] A ticket matching only in an acceptance criterion (e.g. "429") is found.
 - [ ] Query "authentication" on the demo project returns ADR 0002 first.
 - [ ] Empty query returns a tool error.
