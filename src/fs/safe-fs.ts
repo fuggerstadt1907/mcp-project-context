@@ -1,14 +1,20 @@
 // The only way to read files. Every path is checked against root, the deny list, the extension
 // allow-list and the size limit before anything is read.
-import { lstatSync, realpathSync } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { type Dirent, lstatSync, realpathSync } from 'node:fs';
+import { access, constants, open, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Config } from '../config.js';
 
 export const ALLOWED_EXTENSIONS = ['.md', '.mdx', '.txt', '.yaml', '.yml', '.json'] as const;
 const DENIED_SEGMENTS = new Set(['.git', 'node_modules']);
 
-export type SafeFsReason = 'outside_root' | 'denied' | 'extension' | 'too_large' | 'not_found';
+export type SafeFsReason =
+  | 'outside_root'
+  | 'denied'
+  | 'extension'
+  | 'too_large'
+  | 'not_found'
+  | 'unreadable';
 
 export class SafeFsError extends Error {
   override readonly name = 'SafeFsError';
@@ -27,7 +33,8 @@ export interface SafeFs {
   // False only for a missing file; a path that breaks a rule throws. Ignores the size limit.
   exists(relPath: string): Promise<boolean>;
   // Recursive, sorted, paths relative to root with '/'. Never enters symlinked directories.
-  // Files over the size limit are listed, so callers can report them as skipped.
+  // Files over the size limit are listed, so callers can report them as skipped. Denied and
+  // unreadable entries are left out.
   listFiles(relDir: string, options?: { extensions?: readonly string[] }): Promise<string[]>;
 }
 
@@ -46,7 +53,13 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
     const abs = resolve(root, relPath);
     if (!isInside(root, abs)) throw outsideRoot(relPath);
-    const resolved = realpathOfNearestAncestor(abs);
+    let resolved: ReturnType<typeof realpathOfNearestAncestor>;
+    try {
+      resolved = realpathOfNearestAncestor(abs);
+    } catch {
+      // EACCES on a parent directory. Node's message holds the absolute path, so drop it.
+      throw unreadable(relPath);
+    }
     // A broken symlink has no target we can check or read.
     if (resolved === undefined) throw notFound(relPath);
     if (!isInside(root, resolved.real)) throw outsideRoot(relPath);
@@ -72,26 +85,52 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
   }
 
-  // Rules 1 to 4 plus "is a regular file". Returns the real path and size for rule 5.
-  async function inspect(relPath: string): Promise<{ real: string; size: number }> {
+  // Rules 1 to 4 plus "is a readable regular file". Returns the real path for rule 5.
+  async function inspect(relPath: string): Promise<string> {
     const { real, exists } = resolveInsideRoot(relPath);
+    if (real === root) throw notFound(relPath);
     checkFileRules(relPath, real);
     if (!exists) throw notFound(relPath);
-    const info = await stat(real).catch(() => undefined);
-    if (!info?.isFile()) throw notFound(relPath);
-    return { real, size: info.size };
+    const info = await stat(real).catch((error: unknown) => {
+      throw fromErrno(error, relPath);
+    });
+    if (!info.isFile()) throw notFound(relPath);
+    await access(real, constants.R_OK).catch((error: unknown) => {
+      throw fromErrno(error, relPath);
+    });
+    return real;
   }
 
+  // Rule 5 runs on the open handle and caps the read, so a file that grows after the check
+  // cannot get past the limit. A symlink swapped in between check and open is not caught.
   async function readTextFile(relPath: string): Promise<string> {
-    const { real, size } = await inspect(relPath);
-    if (size > maxBytes) {
-      throw new SafeFsError(
-        'too_large',
-        relPath,
-        `File is larger than ${config.maxFileKb} KB: ${relPath}`,
-      );
+    const real = await inspect(relPath);
+    const tooLarge = new SafeFsError(
+      'too_large',
+      relPath,
+      `File is larger than ${config.maxFileKb} KB: ${relPath}`,
+    );
+    const handle = await open(real, 'r').catch((error: unknown) => {
+      throw fromErrno(error, relPath);
+    });
+    try {
+      const info = await handle.stat();
+      if (!info.isFile()) throw notFound(relPath);
+      if (info.size > maxBytes) throw tooLarge;
+      const buffer = Buffer.alloc(maxBytes + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
+        if (bytesRead === 0) break;
+        length += bytesRead;
+      }
+      if (length > maxBytes) throw tooLarge;
+      return buffer.toString('utf8', 0, length);
+    } catch (error) {
+      throw fromErrno(error, relPath);
+    } finally {
+      await handle.close();
     }
-    return readFile(real, 'utf8');
   }
 
   async function exists(relPath: string): Promise<boolean> {
@@ -118,24 +157,29 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     if (!info?.isDirectory()) {
       throw new SafeFsError('not_found', relDir, `Directory not found: ${relDir}`);
     }
+    const entries = await readdir(real, { withFileTypes: true }).catch(() => {
+      throw unreadable(relDir);
+    });
 
     const wanted = options.extensions?.map((ext) => ext.toLowerCase());
     const files: string[] = [];
     const prefix = toPosix(relative(root, resolve(root, relDir)));
-    await walk(real, prefix, files);
+    await walk(entries, real, prefix, files);
     return files
       .filter((file) => wanted === undefined || wanted.includes(extname(file).toLowerCase()))
       .sort();
   }
 
   // Real directories only. Symlinked files go through inspect(), which checks their target;
-  // symlinked directories are skipped, which also rules out cycles.
-  async function walk(absDir: string, relDir: string, out: string[]): Promise<void> {
-    const entries = await readdir(absDir, { withFileTypes: true });
+  // symlinked directories are skipped, which also rules out cycles. Unreadable entries are skipped.
+  async function walk(entries: Dirent[], absDir: string, relDir: string, out: string[]) {
     for (const entry of entries) {
       const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
       if (entry.isDirectory()) {
-        if (!DENIED_SEGMENTS.has(entry.name)) await walk(join(absDir, entry.name), rel, out);
+        if (isDeniedSegment(entry.name)) continue;
+        const abs = join(absDir, entry.name);
+        const children = await readdir(abs, { withFileTypes: true }).catch(() => undefined);
+        if (children) await walk(children, abs, rel, out);
       } else if (entry.isFile() || entry.isSymbolicLink()) {
         const ok = await inspect(rel).then(
           () => true,
@@ -160,15 +204,29 @@ function notFound(relPath: string): SafeFsError {
   return new SafeFsError('not_found', relPath, `File not found: ${relPath}`);
 }
 
+function unreadable(relPath: string): SafeFsError {
+  return new SafeFsError('unreadable', relPath, `File cannot be read: ${relPath}`);
+}
+
+// Node errors carry absolute paths in their message; replace them with a SafeFsError.
+function fromErrno(error: unknown, relPath: string): SafeFsError {
+  if (error instanceof SafeFsError) return error;
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === 'ENOENT' ? notFound(relPath) : unreadable(relPath);
+}
+
 function toPosix(path: string): string {
   return path.split(sep).join('/');
 }
 
+// Case-insensitive, because macOS and Windows file systems are: .GIT is .git there.
 function isDenied(relPath: string): boolean {
-  const segments = relPath.split(sep);
-  return (
-    segments.some((segment) => DENIED_SEGMENTS.has(segment)) || basename(relPath).startsWith('.env')
-  );
+  return relPath.split(sep).some(isDeniedSegment);
+}
+
+function isDeniedSegment(segment: string): boolean {
+  const name = segment.toLowerCase();
+  return DENIED_SEGMENTS.has(name) || name.startsWith('.env');
 }
 
 function hasAllowedExtension(path: string): boolean {

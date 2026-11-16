@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -44,8 +52,20 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const path of locked.splice(0)) chmodSync(path, 0o755);
   rmSync(base, { recursive: true, force: true });
 });
+
+// Permission tests mean nothing when running as root, which can read everything.
+const asRoot = process.getuid?.() === 0;
+
+// Makes a path unreadable for the rest of the test; afterEach restores it before cleanup.
+const locked: string[] = [];
+function lock(rel: string): void {
+  const path = join(root, rel);
+  chmodSync(path, 0o000);
+  locked.push(path);
+}
 
 describe('readTextFile', () => {
   it('reads a nested markdown file inside root', async () => {
@@ -95,6 +115,43 @@ describe('readTextFile', () => {
     await expectReason(safeFs.readTextFile('config/.env.local.md'), 'denied');
     await expectReason(safeFs.readTextFile('.git/config'), 'denied');
     await expectReason(safeFs.readTextFile('node_modules/x/readme.md'), 'denied');
+  });
+
+  it('denies .env*, .git and node_modules in any letter case', async () => {
+    write('NODE_MODULES/x/readme.md');
+    write('Node_Modules/y/readme.md');
+    write('.GIT/info.json');
+    write('.ENV.json');
+    await expectReason(safeFs.readTextFile('NODE_MODULES/x/readme.md'), 'denied');
+    await expectReason(safeFs.readTextFile('Node_Modules/y/readme.md'), 'denied');
+    await expectReason(safeFs.readTextFile('.GIT/info.json'), 'denied');
+    await expectReason(safeFs.readTextFile('.ENV.json'), 'denied');
+  });
+
+  it('denies everything below a directory named .env*', async () => {
+    write('.env/lib/site.md');
+    write('.envrc.d/a.md');
+    await expectReason(safeFs.readTextFile('.env/lib/site.md'), 'denied');
+    await expectReason(safeFs.readTextFile('.envrc.d/a.md'), 'denied');
+  });
+
+  it('reports the root itself as not_found', async () => {
+    await expectReason(safeFs.readTextFile(''), 'not_found');
+    await expectReason(safeFs.readTextFile('.'), 'not_found');
+    await expectReason(safeFs.readTextFile('docs/..'), 'not_found');
+  });
+
+  it.skipIf(asRoot)('reports an unreadable file or directory without host paths', async () => {
+    write('locked.md');
+    write('closed/a.md');
+    lock('locked.md');
+    lock('closed');
+    for (const rel of ['locked.md', 'closed/a.md']) {
+      const error = await safeFs.readTextFile(rel).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(SafeFsError);
+      expect((error as SafeFsError).reason).toBe('unreadable');
+      expect((error as Error).message).not.toContain(base);
+    }
   });
 
   it('denies a missing .env without revealing that it does not exist', async () => {
@@ -211,7 +268,25 @@ describe('listFiles', () => {
     write('.git/x.md');
     write('node_modules/x/readme.md');
     write('sub/node_modules/y.md');
+    write('NODE_MODULES/z.md');
+    write('.Git/w.md');
+    write('.env/lib/site.md');
     await expect(safeFs.listFiles('.')).resolves.toEqual(['a.md']);
+  });
+
+  it.skipIf(asRoot)('skips unreadable files and directories', async () => {
+    write('docs/a.md');
+    write('docs/locked.md');
+    write('docs/closed/b.md');
+    lock('docs/locked.md');
+    lock('docs/closed');
+    await expect(safeFs.listFiles('docs')).resolves.toEqual(['docs/a.md']);
+  });
+
+  it.skipIf(asRoot)('reports an unreadable start directory as unreadable', async () => {
+    write('docs/a.md');
+    lock('docs');
+    await expectReason(safeFs.listFiles('docs'), 'unreadable');
   });
 
   it('keeps files over the size limit, so callers can report them as skipped', async () => {
