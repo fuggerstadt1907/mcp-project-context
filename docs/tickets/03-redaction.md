@@ -29,13 +29,16 @@ Pattern table (one entry per type, easy to extend):
 | `phone` | `+49 170 1234567`, `0821 123456` |
 | `iban` | `DE89 3704 0044 0532 0130 00` |
 
-Replacement: `[REDACTED:<type>]`.
+Replacement: `[REDACTED:<type>]`. `index` is the offset in the original text. When matches overlap,
+the specific type wins over `assignment`, and `redact()` is idempotent. The forms each type
+catches, the false positives kept on purpose and the runtime bounds are in requirements decisions
+37 to 39 and 41 to 48.
 
 ## Acceptance criteria
 
-- [ ] One positive test per type.
-- [ ] False-positive tests stay unchanged: a 40-char git SHA, a UUID, an ISO date, a version
+- [x] One positive test per type.
+- [x] False-positive tests stay unchanged: a 40-char git SHA, a UUID, an ISO date, a version
       `1.32.2`, a markdown table with numbers.
-- [ ] Multiple findings in one text are all masked; `findings` lists each with its type.
-- [ ] Emails are always redacted; there is no allow-list (requirements decision 3).
-- [ ] The function never logs matched values.
+- [x] Multiple findings in one text are all masked; `findings` lists each with its type.
+- [x] Emails are always redacted; there is no allow-list (requirements decision 3).
+- [x] The function never logs matched values.
