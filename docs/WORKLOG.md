@@ -121,7 +121,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 03 – Redaction (2026-11-16)
 
-- Time: TODO
+- Time: <X> min agent + <Y> min review
 - Skills used: implement-ticket, review subagent
 - Questions the agent asked before coding (the user chose the recommended option for all four):
   - What `Finding.index` refers to: the offset in the original text.
@@ -131,8 +131,10 @@ Be honest: mistakes caught in review are the most valuable part.
 - The user added CLAUDE.md rule 7 after these questions: the agent decides implementation details
   and asks at most one round per stage. The review fixes below were decided under that rule.
 - Decisions made (and where recorded):
-  - Decisions 37 to 48 in `docs/requirements.md`; follow-ups and README limitations under Open
+  - Decisions 37 to 50 in `docs/requirements.md`; follow-ups and README limitations under Open
     points; ticket 03 updated.
+  - After the report the user confirmed decision 46 (fail closed) and asked for two additions:
+    `auth_header` and `url_credentials` (decision 49), and a 2 s timing limit (decision 50).
 - Mistakes caught in review:
   - Leak: a quoted value with spaces (`password = "correct horse battery"`) or without a closing
     quote was not masked at all. The value pattern stopped at whitespace and required the closing
@@ -155,17 +157,18 @@ Be honest: mistakes caught in review are the most valuable part.
     a digit visible. It now cuts only at group ends.
   - A `git add -A` swept the user's uncommitted WORKLOG note into a feature commit. That commit was
     redone without the note.
-- Tested: 143 vitest tests, 60 of them in `test/redact.test.ts`. They cover:
-  - every type with positive cases,
-  - the AC23 false positives plus ADR prose, a newline after a key name and IBAN look-alikes,
+- Tested: 151 vitest tests, 68 of them in `test/redact.test.ts`. They cover:
+  - every type with positive cases, including Bearer/Basic headers and credentials in URLs,
+  - the AC23 false positives plus ADR prose, a newline after a key name, IBAN look-alikes, a plain
+    URL and prose about auth schemes,
   - multiple findings with offsets, overlap, idempotency, and the false positives kept on purpose,
   - the demo fixtures: T-002 and CONVENTIONS.md are masked, all other demo files are unchanged,
   - 100 KB timing tests, and a stdout/stderr spy.
 - Not tested:
   - The path through tools and resources (AC22 "any tool or resource"), which comes in ticket 04
     and ticket 09.
-  - Formats outside the ticket table (Bearer, URL credentials, `sk_live_`, more phone formats),
-    which are listed for README Limitations.
+  - Formats outside the ticket table (`sk_live_`, `ASIA…`, more phone formats), which are listed
+    for README Limitations.
   - Coverage, because `@vitest/coverage-v8` is not installed.
   - A CI run, which needs a push.
 - PR: TODO
@@ -186,3 +189,5 @@ Be honest: mistakes caught in review are the most valuable part.
 - implement-ticket asks too many low-level questions (Finding.index, overlap handling).
   Fix: CLAUDE.md rule 7 (agent decides details, asks only on scope/output/security/ADR conflicts).
   Consider moving this rule into the skill itself.
+- Never use `git add -A`; stage explicit paths. In ticket 03 it swept the user's uncommitted
+  WORKLOG note into a feature commit.
