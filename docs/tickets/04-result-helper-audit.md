@@ -19,10 +19,15 @@ Every tool returns results the same way: redacted, with structured content, and 
 Audit line (stderr, JSON): `{ "event": "tool_call", "tool", "ok", "ms", "bytes", "redactions" }`.
 No arguments, no content.
 
+Resource handlers get the same treatment: a helper that redacts resource contents and writes
+`{ "event": "resource_read", "scheme", "ok", "ms", "bytes", "redactions" }`. Only the URI scheme
+(`adr`, `ticket`), never the id (requirements NFR-6, ADR 0005).
+
 ## Acceptance criteria
 
 - [ ] Test: a structured result with a fake GitHub token in a nested field comes back masked in
       both `content` and `structuredContent`.
 - [ ] Test: a `SafeFsError('outside_root')` becomes a tool error, not an exception.
 - [ ] Test: the audit line contains no input values (capture stderr in the test).
-- [ ] Decide open question 5 (`--audit-file`) and record it.
+- [ ] Test: a resource read writes one `resource_read` line without the id.
+- [ ] No `--audit-file` option; audit goes to stderr only (ADR 0005).

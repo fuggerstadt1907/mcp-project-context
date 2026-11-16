@@ -37,5 +37,5 @@ Replacement: `[REDACTED:<type>]`.
 - [ ] False-positive tests stay unchanged: a 40-char git SHA, a UUID, an ISO date, a version
       `1.32.2`, a markdown table with numbers.
 - [ ] Multiple findings in one text are all masked; `findings` lists each with its type.
-- [ ] Resolve open question 3 (email allow-list) and record the answer.
+- [ ] Emails are always redacted; there is no allow-list (requirements decision 3).
 - [ ] The function never logs matched values.

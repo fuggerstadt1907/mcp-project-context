@@ -17,7 +17,8 @@ With explicit opt-in, the agent can propose a new decision as an ADR draft.
 
 ## Acceptance criteria
 
-- [ ] Resolve open question 6 (numbering) before coding.
+- [ ] Numbering: highest number across `<adrDir>` and `<adrDir>/drafts/`, plus one
+      (requirements decision 6). With ADRs 0001 to 0004 and draft 0005, the next draft is 0006.
 - [ ] Without the flag, `listTools()` does not contain `create_adr_draft`.
 - [ ] Never overwrites: a race or existing file returns a tool error.
 - [ ] A title like `../../evil` produces a safe slug inside `drafts/`.

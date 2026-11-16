@@ -13,7 +13,8 @@ Teams that keep tickets in GitHub Issues get the same `list_tickets` / `get_tick
 - Flag `--github-repo owner/name`. Token from `GITHUB_TOKEN` env var only, never from flags,
   never logged.
 - Map issue state, labels and task-list checkboxes to the existing schema.
-- This adds network access: write ADR 0004 covering opt-in, rate limits and what data leaves.
+- This adds network access: write ADR 0006 covering opt-in, rate limits and what data leaves.
+  (ADR 0004 and 0005 are taken by the v0.1 decisions.)
 
 ## Acceptance criteria
 

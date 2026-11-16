@@ -11,7 +11,9 @@ never touches stdout.
 
 - `src/config.ts`: `Config` type and zod schema. Fields: `root` (real path, must exist and be a
   directory), `adrDir` (default `docs/adr`), `ticketsDir` (default `tickets`), `maxFileKb`
-  (default 256), `allowWrite` (default false).
+  (default 256), `allowWrite` (default false). `adrDir` and `ticketsDir` must resolve inside the
+  real root (same realpath check as safe-fs); otherwise the config is invalid. A directory that
+  does not exist is allowed and only logs a warning at startup (requirements FR-1, FR-16).
 - `src/cli.ts`: parse flags with `node:util` `parseArgs`. `--version` and `--help`. On invalid
   config, print the reason to stderr and exit with code 2.
 - `src/server.ts`: `createServer(config): McpServer`. No tools yet.
@@ -24,6 +26,8 @@ never touches stdout.
 - [ ] `pnpm dev` starts and waits for input without printing to stdout.
 - [ ] `node dist/cli.js` without `--root` exits with code 2 and a readable message.
 - [ ] `--root` pointing to a file or missing path exits with code 2.
+- [ ] `--tickets-dir ../other` or a symlinked dir pointing outside root exits with code 2.
+- [ ] A missing `--adr-dir` or `--tickets-dir` starts the server and logs a warning.
 - [ ] Test: `createServer` connected via `InMemoryTransport` answers `listTools()` with an empty list.
 - [ ] Test: config parsing (defaults, invalid values).
 - [ ] `pnpm check` and `pnpm build` pass.
