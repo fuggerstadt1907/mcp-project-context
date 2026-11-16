@@ -58,6 +58,13 @@ describe('parseFrontmatter', () => {
     });
   });
 
+  it('treats __proto__ as an ordinary key', () => {
+    const parsed = data(fm('__proto__: [a]', 'id: T-1'));
+    expect(Object.getPrototypeOf(parsed)).toBeNull();
+    expect(parsed.__proto__).toEqual(['a']);
+    expect(parsed.id).toBe('T-1');
+  });
+
   it('accepts CRLF line endings and a BOM', () => {
     const result = parseFrontmatter('﻿---\r\nid: T-1\r\n---\r\nBody.\r\n');
     expect(result).toEqual({ kind: 'ok', data: { id: 'T-1' }, body: 'Body.\n' });

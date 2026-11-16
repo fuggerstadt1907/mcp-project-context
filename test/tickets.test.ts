@@ -171,6 +171,30 @@ describe('list_tickets', () => {
     );
   });
 
+  it.each(['a/b', 'T 2', 'T#2', 'T-ä', 'T:2'])(
+    'skips a ticket with id %j that cannot be a ticket:// URI',
+    async (id) => {
+      const root = tempRoot({
+        'tickets/T-1.md': ticket('T-1'),
+        'tickets/x.md': `---\nid: "${id}"\n---\n`,
+      });
+      const result = await call(root, 'list_tickets');
+      expect(ids(result)).toEqual(['T-1']);
+      expect(text(result)).toContain('1 file skipped (invalid id).');
+      expect(warnings()).toContainEqual(
+        expect.objectContaining({ path: 'tickets/x.md', reason: 'invalid_id' }),
+      );
+    },
+  );
+
+  it('accepts ids with dots and underscores', async () => {
+    const root = tempRoot({ 'tickets/x.md': ticket('PROJ_1.2') });
+    const result = await withClient(root, (client) =>
+      client.readResource({ uri: 'ticket://PROJ_1.2' }),
+    );
+    expect((result.contents[0] as { text: string }).text).toContain('id: PROJ_1.2');
+  });
+
   it('ignores README.md in the tickets directory', async () => {
     const root = tempRoot({
       'tickets/README.md': '# How we write tickets\n',
@@ -342,6 +366,11 @@ describe('get_ticket', () => {
     ],
     ['tickets/T-2.md', '# No frontmatter\n', 'the file has no frontmatter'],
     ['tickets/T-2.md', '---\ntitle: x\n---\n', 'the frontmatter has no id'],
+    [
+      'tickets/T-2.md',
+      '---\nid: T 2\n---\n',
+      'the id may only contain letters, digits, ".", "_" and "-"',
+    ],
   ])('names the parse reason for skipped %s', async (path, content, reason) => {
     const root = tempRoot({ 'tickets/T-1.md': ticket('T-1'), [path]: content });
     const result = await call(root, 'get_ticket', { id: 'T-2' });
@@ -435,6 +464,13 @@ describe('ticket parsing', () => {
       { text: 'Nested item', done: false },
       { text: 'Under a subheading', done: false },
     ]);
+  });
+
+  it('ignores checklist items inside a code fence in the acceptance section', async () => {
+    const parsed = await getTicket(
+      '## Acceptance criteria\n\n```md\n- [ ] in fence\n```\n\n- [ ] Real\n',
+    );
+    expect(parsed.acceptanceCriteria).toEqual([{ text: 'Real', done: false }]);
   });
 
   it('ignores an acceptance heading inside a code fence', async () => {

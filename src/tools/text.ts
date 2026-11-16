@@ -15,12 +15,14 @@ const REASON_LABELS: Record<SkipReason, string> = {
   no_frontmatter: 'no frontmatter',
   invalid_frontmatter: 'invalid frontmatter',
   missing_id: 'missing id',
+  invalid_id: 'invalid id',
 };
 
 const REASON_TEXTS: Partial<Record<SkipReason, string>> = {
   no_frontmatter: 'the file has no frontmatter',
   invalid_frontmatter: 'the frontmatter is outside the supported subset',
   missing_id: 'the frontmatter has no id',
+  invalid_id: 'the id may only contain letters, digits, ".", "_" and "-"',
 };
 
 /** `"1 file skipped (too large)."` or `"3 files skipped (2 too large, 1 unreadable)."`; empty if none. */

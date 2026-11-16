@@ -21,7 +21,11 @@ export interface Ticket {
 
 export type TicketSummary = Pick<Ticket, 'id' | 'title' | 'status' | 'labels'>;
 
-export type TicketParseReason = 'no_frontmatter' | 'invalid_frontmatter' | 'missing_id';
+export type TicketParseReason =
+  | 'no_frontmatter'
+  | 'invalid_frontmatter'
+  | 'missing_id'
+  | 'invalid_id';
 export type TicketSkipReason = SafeFsReason | TicketParseReason;
 
 export interface SkippedTicketFile {
@@ -56,6 +60,8 @@ interface Scanned {
 
 // `T-012` from `T-012-login.md` or `T-012.md`. Files without such a prefix have no filename id.
 const FILENAME_ID = /^([A-Za-z]+-\d+)(?=[-_.]|$)/;
+// Ids become part of `ticket://{id}`, so they are limited to characters that need no encoding.
+const VALID_ID = /^[A-Za-z0-9._-]+$/;
 const ACCEPTANCE_HEADING = 'acceptance criteria';
 const CHECKLIST_ITEM = /^\s*[-*+]\s+\[([ xX])\](?:\s+(.*))?$/;
 
@@ -177,6 +183,10 @@ function parseTicket(path: string, markdown: string): Ticket | { reason: TicketP
     log.warn('ticket skipped', { path, reason: 'missing_id' });
     return { reason: 'missing_id' };
   }
+  if (!VALID_ID.test(id)) {
+    log.warn('ticket skipped', { path, reason: 'invalid_id' });
+    return { reason: 'invalid_id' };
+  }
   const fromName = filenameId(path);
   if (fromName !== undefined && fromName.toLowerCase() !== id.toLowerCase()) {
     log.warn('ticket id differs from the filename, using the frontmatter id', { path });
@@ -213,7 +223,18 @@ function parseBody(body: string): Pick<Ticket, 'description' | 'acceptanceCriter
 
   const acceptanceCriteria: AcceptanceCriterion[] = [];
   let current: AcceptanceCriterion | undefined;
+  let fence: string | undefined;
   for (const line of lines.slice(start + 1, end)) {
+    // Checklist items in a fenced code block are examples, not criteria.
+    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[1] as string;
+      if (fence === undefined) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+      current = undefined;
+      continue;
+    }
+    if (fence !== undefined) continue;
     const item = CHECKLIST_ITEM.exec(line);
     if (item) {
       current = { text: (item[2] ?? '').trim(), done: item[1] !== ' ' };

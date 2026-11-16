@@ -20,12 +20,16 @@ const PLAIN_START_DENIED = /^(?:[?:,[\]{}#&*!|>%@`]|-(?:\s|$))/;
 class Invalid extends Error {}
 
 export function parseFrontmatter(markdown: string): FrontmatterResult {
-  const lines = markdown.replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+  const lines = markdown
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
   if (lines[0]?.trimEnd() !== '---') return { kind: 'none' };
   const end = lines.findIndex((line, index) => index > 0 && line.trimEnd() === '---');
   if (end === -1) return { kind: 'invalid', line: 1, problem: 'no closing --- line' };
 
-  const data: Record<string, FrontmatterValue> = {};
+  // No prototype, so a `__proto__` key is an ordinary key.
+  const data: Record<string, FrontmatterValue> = Object.create(null);
   for (let index = 1; index < end; index++) {
     const line = lines[index] as string;
     if (line.trim() === '') continue;
