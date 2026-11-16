@@ -17,6 +17,8 @@ A reviewer understands the project in two minutes and sees how it was built.
 - `npm publish` as `mcp-project-context` (requirements NFR-9; the name was free on 2026-11-16).
   `dist/cli.js` needs a `#!/usr/bin/env node` shebang (tsup `banner`).
 - README: document the frontmatter subset and that the audit log goes to stderr (ADR 0005).
+- README: document the supported ADR formats (bullet, Nygard, MADR 3), the source order and the
+  `X by …` status cut (requirements decisions 73–77).
 
 ## Acceptance criteria
 

@@ -8,8 +8,8 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 6 / 10 |
-| Total time | 4,42 h |
-| Questions the agent asked before coding | 45 |
+| Total time | 4,75 h |
+| Questions the agent asked before coding | 52 |
 | Agent mistakes caught in review | 31 |
 | Test coverage (src) | – |
 
@@ -319,6 +319,23 @@ Be honest: mistakes caught in review are the most valuable part.
 - Claude used list_adrs + get_adr (2 calls), found all 5 ADRs and explained
   ADR 0004 without reading files itself.
 - Screenshot: docs/assets/dogfood-adr.png
+
+### Requirements session – ticket 05b ADR formats (2026-11-16)
+
+- Time: 20 min
+- Skills used: grill-ticket
+- Questions the agent asked before coding: 7, in 3 rounds (4 behaviour, 2 on documentation,
+  1 confirmation). The ones that changed the plan:
+  - MADR section mapping: the ticket had it out of scope, but without it every MADR ADR would
+    break AC5 (template warning). Now in scope, including `### Consequences`.
+  - `Superseded by …`: cut to `Superseded` for every source, so the exact filter (FR-11) still works.
+  - Frontmatter outside the subset: the ADR stays listed (FR-14) instead of being skipped like a ticket.
+- Decisions made (and where recorded):
+  - Requirements decisions 73–77, FR-17 and the ADR edge-case rows updated; the two 05b open
+    points closed; README item added to ticket 10. Ticket 05b got a Decisions section and four
+    more acceptance criteria.
+- Mistakes caught in review: none (no code).
+- PR: none (docs only)
 
 ## Skill improvements
 

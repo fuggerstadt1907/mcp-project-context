@@ -59,7 +59,7 @@ There are no roles or accounts. One server process serves one project root for o
 | FR-14 | An ADR that does not follow the template is still listed (see Edge cases). |
 | FR-15 | Files skipped during listing or search (over `--max-file-kb`, unparseable) are left out of the result. A warning with path and reason goes to stderr, and the text content states how many files were skipped and why (for example "1 file skipped (too large)"). `get_adr`/`get_ticket` on such an id return a tool error with the reason. |
 | FR-16 | If `--adr-dir` or `--tickets-dir` does not exist, the server still starts and logs a warning. The matching list tools return an empty list, and the text content names the missing directory and the flag to set. |
-| FR-17 | An ADR's status and date are read from a `- Status:`/`- Date:` bullet, a `## Status` section with a `Date:` line (Nygard, title `# 1. …`) or frontmatter `status:`/`date:` (MADR 3). |
+| FR-17 | An ADR's status and date are read from frontmatter `status:`/`date:` (MADR 3), a `- Status:`/`- Date:` bullet, or a `## Status` section and a `Date:` line (Nygard, title `# 1. …`), in that order. A status of the form `X by …` is returned as `X`. MADR sections `Context and Problem Statement` and `Decision Outcome` count as context and decision; a `### Consequences` inside Decision Outcome counts as consequences. |
 
 ### Non-functional
 
@@ -111,7 +111,8 @@ There are no roles or accounts. One server process serves one project root for o
 
 | Case | Behaviour |
 | --- | --- |
-| ADR without the expected headings | Listed. Id from the `NNNN-` filename prefix. Title from the first `#` heading with any `NNNN:` prefix stripped, else the filename slug. Status `Unknown` if there is no `Status` bullet, date empty. Missing sections are empty strings; if none of Context, Decision, Consequences is found, the whole body goes into `context`. A warning is logged. |
+| ADR without the expected headings | Listed. Id from the `NNNN-` filename prefix. Title from the first `#` heading with any `NNNN:` or `1.` prefix stripped, else the filename slug. Status `Unknown` if none of the FR-17 sources gives one, date empty. Missing sections are empty strings; if none of Context, Decision, Consequences is found, the body goes into `context`, without frontmatter and without a `## Status` section. A warning is logged. |
+| ADR frontmatter outside the subset | Listed. The frontmatter is ignored, status and date come from the other FR-17 sources. Warning with path, line and problem, never content (decision 75). |
 | Ticket id differs from filename | Frontmatter wins, warning (FR-12). |
 | Duplicate ticket id | First by relative path wins, warning naming both files (FR-12). |
 | Frontmatter outside the subset, missing or without `id` | Ticket skipped, warning (FR-13). |
@@ -336,6 +337,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 70 | Matching, sorting and the mismatch warning | Ids and filters are compared case-insensitively after trimming. The list is sorted by id with digit runs compared by value (`T-2` before `T-10`). The filename warning fires only if the filename starts with an id-like prefix (`[A-Za-z]+-\d+`) that differs from the frontmatter id. Duplicates are warned about but not counted as skipped (as for ADRs). An empty filter is no filter (decision 62). Decided by the agent under rule 7. | Agents guess casing. Files named `login.md` would otherwise warn on every call. |
 | 71 | Frontmatter details | `labels: api` (a plain value) becomes one label, `labels:` none. An array for `id`, `title` or `status` is invalid. Double quotes unescape `\"` and `\\` only; single quotes unescape `''`. Blank lines are allowed; comments, duplicate keys, trailing commas, ` #` and an unquoted `: ` in a plain value are outside the subset. A `__proto__` key is an ordinary key. Warnings give the line number and a fixed problem text, never content. Decided by the agent under rule 7. | Stays a strict subset of YAML: anything YAML would read differently is rejected. stderr is not redacted. |
 | 72 | Acceptance criteria and description | The first `## Acceptance criteria` heading (any case, outside code fences) opens the section; it runs to the next heading of level 1 or 2. Only `- [ ]`/`- [x]` items count (`*`, `+` and `[X]` too). Indented lines below an item continue it, so a plain sub-bullet is appended to its parent. Items inside a code fence are ignored. The description is the body without that section. Decided by the agent under rule 7; the fence rule was found in review. | Matches the demo tickets and the template. Fenced examples are not criteria. |
+| 73 | Precedence of the ADR status and date sources | Frontmatter, then bullet, then `## Status` section (date: `Date:` line). No warning when sources disagree. Confirmed by the user. | A real file uses one format. The rule is deterministic, and a conflict warning would mostly be noise. |
+| 74 | Statuses like `Superseded by [2. Use X](0002-use-x.md)` | For every source, a value of the form `X by …` is cut to `X` (`Superseded`, `Amended`). Other values such as `In progress` stay as written. Confirmed by the user. | FR-11 matches exactly, so `list_adrs({ status: "superseded" })` must find these ADRs. The successor stays readable through `adr://`. |
+| 75 | ADR frontmatter outside the subset | The ADR is listed, the frontmatter is ignored and status and date come from the other sources (else `Unknown`). A warning gives path, line and problem, never content. The block up to the closing `---` stays out of every field; without a closing line the file is read as if it had no frontmatter. Confirmed by the user. | FR-14: an ADR off the template is still listed. Skipping it like a ticket would hide an ADR because of one comment line. |
+| 76 | MADR section names | Mapped: `## Context and Problem Statement` → context, `## Decision Outcome` → decision. A `### Consequences` inside Decision Outcome becomes consequences and is removed from decision. Other MADR sections (`Considered Options`, `Pros and Cons …`) are not returned by `get_adr`. When `Decision Outcome` is present, a missing consequences section is not warned about. Confirmed by the user. | Without the mapping every MADR ADR would warn and put its whole body into `context`. Consequences are optional in MADR. |
+| 77 | ADR format parsing details | The `## Status` section gives its first non-empty line; later lines (`Supersedes …`) are ignored, an empty section counts as missing. A plain `Date:` line (bold allowed) counts only before the first `##` heading. The cut of decision 74 is case-insensitive and needs text after `by`. Title prefixes stripped: `^\d+\s*:\s*` and `^\d+\.\s+` (so `1.5 release` stays). From the frontmatter only `status` and `date` are read; other keys are ignored, and an array value counts as missing. Sections, title and the context fallback are read from the body after the frontmatter. The template warning counts status as present from any source. Decided by the agent under rule 7. | Matches adr-tools output, where the status line comes first. A title like `1.5 release` is not a numbered heading. |
 
 ## Open points
 
@@ -350,15 +356,13 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (`https://token@host` is masked as an email instead), and phone formats with parentheses or
   without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
   (decision 46).
-- Ticket 05b: precedence of the status sources, whole `Superseded by …` line or first word, and
-  frontmatter outside the subset. Listed in the ticket; resolve with grill-ticket before it starts.
 - Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
   reports as missing. This is CommonMark behaviour; kept.
 - Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
   for calls the SDK rejects early (decision 57) needs a fix.
-- Ticket 05b: reuse `src/sources/frontmatter.ts` for MADR 3 frontmatter. Decide whether an ADR
-  with frontmatter outside the subset is skipped (as tickets are) or listed with status `Unknown`.
 - Ticket 10: README documents the frontmatter subset, the allowed ticket id characters
   (decision 69) and that `README.md` files under `--tickets-dir` are ignored.
+- Ticket 10: README documents the supported ADR formats (bullet, Nygard, MADR 3) with the source
+  order and the `X by …` cut (decisions 73–77).
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.

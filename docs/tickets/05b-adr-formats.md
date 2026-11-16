@@ -39,17 +39,18 @@ adr-tools (Nygard) or MADR 3 ADR is listed with status `Unknown` (requirements d
 - A `## Status` section and the frontmatter block do not end up in `context` when no other section
   is found.
 - Fixtures for each format are written to a temp dir in the tests. The demo project stays as it is.
-- Out of scope: mapping MADR section names (`Context and Problem Statement`, `Decision Outcome`)
-  to `context`/`decision`/`consequences`. Decide that during grilling if it is wanted.
+- Status values of the form `X by …` are cut to `X` (`Superseded by [2. Use X](…)` → `Superseded`).
+- MADR sections: `## Context and Problem Statement` → context, `## Decision Outcome` → decision,
+  `### Consequences` inside Decision Outcome → consequences.
+- Frontmatter outside the subset: the ADR is still listed, the frontmatter is ignored, a warning
+  names path, line and problem.
 
-## Open questions (resolve before implementing)
+## Decisions
 
-- Precedence when a file has more than one status source (proposal: frontmatter, then bullet,
-  then `## Status` section).
-- Nygard status lines like `Superseded by [2. Use X](0002-use-x.md)`: return the whole line or
-  only the first word? The status filter matches exactly (FR-11).
-- Frontmatter outside the subset: fall back to the other sources with a warning, or treat the ADR
-  as malformed?
+Resolved in grilling, recorded as requirements decisions 73–77 (FR-17 and the edge-case rows are
+updated): source order frontmatter → bullet → `## Status` without a conflict warning (73), the
+`X by …` cut (74), frontmatter outside the subset (75), MADR section mapping (76), parsing details
+(77). README documentation of the formats moves to ticket 10.
 
 ## Acceptance criteria
 
@@ -60,4 +61,11 @@ adr-tools (Nygard) or MADR 3 ADR is listed with status `Unknown` (requirements d
       date, and no frontmatter in any field.
 - [ ] `list_adrs({ status: "accepted" })` finds ADRs of all three formats.
 - [ ] No template warning for any of the three formats when all their parts are present.
+- [ ] A Nygard ADR with `Superseded by [2. Use X](0002-use-x.md)` returns status `Superseded` and
+      is found by `list_adrs({ status: "superseded" })`.
+- [ ] A MADR ADR returns its `Context and Problem Statement` as context, `Decision Outcome` as
+      decision without the `### Consequences` part, and that part as consequences.
+- [ ] An ADR with frontmatter outside the subset is listed, takes status and date from a bullet or
+      `## Status` section, and logs a warning with line and problem but no content.
+- [ ] A `# 1.5 release` title is not stripped.
 - [ ] Tests via `InMemoryTransport` + `Client`, one temp-dir fixture per format.
