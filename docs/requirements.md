@@ -222,7 +222,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 01 Server skeleton | FR-1, FR-16 (startup part), NFR-5 | done · 2026-11-16 · ticket-01-server-skeleton |
 | 02 Safe file access | NFR-1, NFR-2 | done · 2026-11-16 · ticket-02-safe-file-access |
 | 03 Redaction | NFR-3 | done · 2026-11-16 · ticket-03-redaction |
-| 04 Result helper and audit | FR-10, NFR-6 | open |
+| 04 Result helper and audit | FR-10, NFR-6 | done · 2026-11-16 · ticket-04-result-helper-audit |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | open |
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
@@ -312,6 +312,13 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 48 | Private key without an END line | Masked from `BEGIN` to the end of the text. | Pasted or truncated fragments must not leak. Found in review. |
 | 49 | `Authorization` headers and credentials in URLs | Two new types. `auth_header` masks the credential after `Bearer`/`Basic` (either case) if it is at least 8 characters with a digit. A JWT there keeps the `jwt` type. `url_credentials` masks `user:password` in `scheme://user:password@host` and runs before `email`. A URL without credentials stays unchanged. | Asked for by the user after the review. The digit rule keeps prose like "Basic authentication" readable. |
 | 50 | Limit of the regex timing tests | 2 s per 100 KB input (actual: a few ms). | Catastrophic backtracking shows up as seconds, not milliseconds. 2 s catches it without flaking on slow CI runners. |
+| 51 | Signature of the result helpers | `ok(structured, text)` and `fail(message)` without a tool name, as in `docs/architecture.md`. `withAudit(tool, handler)` gets the redaction count from a module `WeakMap`. A handler result that `ok()` or `fail()` did not build becomes an internal tool error. | `withAudit` already knows the name. The `WeakMap` keeps the result shape clean, and the check catches a tool that returns raw text. |
+| 52 | Exceptions in a tool handler | `withAudit` catches all of them. A `SafeFsError` becomes `fail()` with its redacted message. Anything else becomes `Internal error in <tool>. Try again or report it.` and a `log.error` line with the error name and the redacted message. Confirmed by the user. | Otherwise the SDK sends `error.message` to the client unredacted, possibly with host paths. |
+| 53 | Errors and contents in resource reads | Resources have no `isError`, so `withResourceAudit` writes `ok: false` and rethrows. A `ResourceNotFoundError` passes through. A `SafeFsError` `not_found` becomes `ResourceNotFoundError(uri)`, which the client sees as -32602 with the URI and without the file path. Other `SafeFsError`s keep their redacted message, and anything else gets a generic message. Entries are rebuilt from `uri`, `mimeType` and `text`, so `_meta` is dropped. Binary contents are an error. | Same rules as for tools. Nothing unredacted reaches the client. |
+| 54 | Audit line fields | `{ time, level: 'info', msg: 'audit', event, … }` through `log.audit()`. `ms` is a rounded integer. `bytes` is the UTF-8 length of the JSON result after redaction, and 0 for a failed resource read. `redactions` counts every replacement in the result, so one secret in both `content` and `structuredContent` counts twice. | Same shape as every other log line. The count is what was masked, not how many distinct secrets there were. |
+| 55 | Object keys and changes after `ok()` | Keys in `structuredContent` are redacted too. `ok()` and `fail()` return frozen objects. | Found in review: a key built from content (counts per assignee) leaked, and a handler could put raw text back after `ok()`. |
+| 56 | Output schemas and redaction | Text fields in an `outputSchema` are plain `z.string()`, with no `.email()`, `.url()`, `.regex()` or enum on text that comes from files. Checked in the review of tickets 05 and 06. | The SDK validates `structuredContent` after redaction. A format check then fails, the agent gets an output validation error, and the audit line still says `ok: true`. Found in review; decided by the agent under rule 7. |
+| 57 | Calls the SDK rejects before the handler | Invalid input, unknown tools and resource URIs that match no template produce no audit line. Accepted for v0.1. | The SDK answers them before `withAudit` runs. Overriding SDK internals is fragile. The zod messages seen do not echo input values. |
 
 ## Open points
 
@@ -326,5 +333,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (`https://token@host` is masked as an email instead), and phone formats with parentheses or
   without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
   (decision 46).
+- Tickets 05 and 06: every tool file uses `withAudit` and every resource uses `withResourceAudit`.
+  Consider an architecture test for this. Output schemas follow decision 56.
+- Tickets 05 and 06: sources should not put ids into exception messages. Unexpected errors are logged
+  with their redacted message (decision 52), and for resources that would put the id on stderr.
+- Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
+  for calls the SDK rejects early (decision 57) needs a fix.
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.

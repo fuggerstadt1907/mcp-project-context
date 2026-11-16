@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 3 / 10 |
-| Total time | 1,75 h |
-| Questions the agent asked before coding | 35 |
-| Agent mistakes caught in review | 19 |
+| Tickets done | 4 / 10 |
+| Total time | 2,42 h |
+| Questions the agent asked before coding | 37 |
+| Agent mistakes caught in review | 23 |
 | Test coverage (src) | – |
 
 ## Template
@@ -172,6 +172,50 @@ Be honest: mistakes caught in review are the most valuable part.
   - Coverage, because `@vitest/coverage-v8` is not installed.
   - A CI run, which needs a push.
 - PR: #14
+
+### Ticket 04 – Result helper and audit log (2026-11-16)
+
+- Time: 40 min
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding (one round, the user chose the recommended option for both):
+  - How `withAudit` handles exceptions other than `SafeFsError`: catch all, with a generic message
+    for the client (decision 52). The ticket only named `SafeFsError`, and the SDK would have sent
+    any other message to the client unredacted.
+  - Plan, test points, branch and the agent's own decisions: confirmed.
+- Decisions made (and where recorded):
+  - Decisions 51 to 57 in `docs/requirements.md`. The agent took 51 and 53 to 57 under rule 7.
+    The ticket and `docs/architecture.md` now match the built signatures.
+  - Follow-ups for tickets 05, 06 and 09 under Open points.
+- Mistakes caught in review:
+  - Object keys in `structuredContent` were not redacted. A key built from content, such as counts
+    per assignee, would have leaked an email. Keys are now redacted.
+  - The `WeakMap` check only looked at object identity. A handler could change the text after
+    `ok()` and the raw value went out. Results are now frozen.
+  - Resource entries were spread, so `_meta` and other fields passed through unredacted. Entries
+    are now rebuilt field by field.
+  - The SDK validates the output schema after redaction. A field with `.email()` failed for the
+    agent while the audit line said `ok: true`. Not fixed in code: decision 56 makes text fields
+    plain strings, checked in tickets 05 and 06.
+- Mistakes the agent caught itself:
+  - All tests were green on the first run. A mutation check (redaction off, `WeakMap` guard off,
+    `not_found` mapping off) showed that the `not_found` test only checked that something was
+    thrown. It now asserts code -32602 and the URI.
+- Tested: 168 vitest tests, 16 of them in `test/result.test.ts`, on a probe tool and a probe
+  resource over `InMemoryTransport`. They cover:
+  - a nested token masked in `content` and `structuredContent`, redacted keys, and a frozen result,
+  - `SafeFsError` `outside_root` as a tool error, a redacted `SafeFsError` message, and the generic
+    error without the original message,
+  - a raw result not built with `ok()`, which becomes a tool error,
+  - the exact key set of both audit lines, no arguments, content or ids on stderr, and an integer `ms`,
+  - resource `not_found` as -32602, a redacted `SafeFsError`, binary contents, and `_meta` dropped,
+  - nothing on stdout in any test, and `--audit-file` rejected by the CLI.
+- Not tested:
+  - Real tools and resources, which do not exist yet (tickets 05 and 06). AC22 and AC26 end to end
+    come in ticket 09.
+  - The audit line for calls the SDK rejects before the handler (decision 57). There is none.
+  - Coverage, because `@vitest/coverage-v8` is not installed.
+  - A CI run, which needs a push.
+- PR: #15
 
 ## Skill improvements
 

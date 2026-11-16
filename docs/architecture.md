@@ -29,7 +29,7 @@ Logging never touches stdout.
 | `src/cli.ts` | Parse flags, build `Config`, call `serveStdio(() => createServer(config))`. |
 | `src/config.ts` | `Config` type, defaults, validation (zod). Resolves `root` to a real path. |
 | `src/server.ts` | `createServer(config): McpServer`. Registers tools and resources. Write tools only if `config.allowWrite`. |
-| `src/log.ts` | Logger to stderr. `audit(event)` writes one JSON line. |
+| `src/log.ts` | Logger to stderr. `log.audit(event, fields)` writes one JSON line. |
 | `src/fs/safe-fs.ts` | `createSafeFs(config)` with `readTextFile(rel)`, `exists(rel)`, `listFiles(relDir, { extensions })`. Enforces root (after realpath), deny list, extension allow-list, size limit; throws `SafeFsError` with a `reason`. Also exports the inside-root check that `config.ts` uses. |
 | `src/redact.ts` | `redact(text): { text, findings }`. Pattern table, one entry per secret or PII type. |
 | `src/sources/adr.ts` | Parse ADR markdown into `{ id, title, status, date, context, decision, consequences }`. |
@@ -37,7 +37,7 @@ Logging never touches stdout.
 | `src/sources/conventions.ts` | Load known convention files if present. |
 | `src/search.ts` | Keyword search over all sources, simple scoring, snippets. |
 | `src/tools/*.ts` | One tool per file: schema, annotations, handler. |
-| `src/tools/result.ts` | Helpers `ok(structured, text)` and `fail(message)`; applies redaction and audit. |
+| `src/tools/result.ts` | `ok(structured, text)` and `fail(message)` redact the result. `withAudit(tool, handler)` and `withResourceAudit(scheme, read)` handle errors and write the audit line. |
 
 ## Key decisions
 
