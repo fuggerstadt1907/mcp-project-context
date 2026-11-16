@@ -84,7 +84,7 @@ Be honest: mistakes caught in review are the most valuable part.
   without `--root` (exit 2), and `initialize` plus `tools/list` piped into the built CLI. stdout
   carried only JSON-RPC, stderr only JSON lines.
 - Not tested: CI run (needs a push), Windows paths.
-- PR: TODO
+- PR: #12
 
 ## Skill improvements
 
