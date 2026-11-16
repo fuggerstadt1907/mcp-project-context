@@ -223,7 +223,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 02 Safe file access | NFR-1, NFR-2 | done · 2026-11-16 · ticket-02-safe-file-access |
 | 03 Redaction | NFR-3 | done · 2026-11-16 · ticket-03-redaction |
 | 04 Result helper and audit | FR-10, NFR-6 | done · 2026-11-16 · ticket-04-result-helper-audit |
-| 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | open |
+| 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | done · 2026-11-16 · ticket-05-adr-tools |
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | open |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
 | 08 Write tool | FR-9, NFR-4 | open |
@@ -319,6 +319,13 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 55 | Object keys and changes after `ok()` | Keys in `structuredContent` are redacted too. `ok()` and `fail()` return frozen objects. | Found in review: a key built from content (counts per assignee) leaked, and a handler could put raw text back after `ok()`. |
 | 56 | Output schemas and redaction | Text fields in an `outputSchema` are plain `z.string()`, with no `.email()`, `.url()`, `.regex()` or enum on text that comes from files. Checked in the review of tickets 05 and 06. | The SDK validates `structuredContent` after redaction. A format check then fails, the agent gets an output validation error, and the audit line still says `ok: true`. Found in review; decided by the agent under rule 7. |
 | 57 | Calls the SDK rejects before the handler | Invalid input, unknown tools and resource URIs that match no template produce no audit line. Accepted for v0.1. | The SDK answers them before `withAudit` runs. Overriding SDK internals is fragile. The zod messages seen do not echo input values. |
+| 58 | Text content of the ADR tools | Compact markdown. `list_adrs`: one line `0001  Title  (Status, Date)` per ADR, then the skip line. `get_adr`: `# id: title`, `Status: … · Date: …`, then the three sections, `(empty)` for an empty one. Confirmed by the user. | Readable for agent and human, same data as `structuredContent`. |
+| 59 | Which files are ADRs | Only `NNNN-*.md` directly in `--adr-dir`. `README.md`, templates, `drafts/` and other subdirectories are ignored silently and not counted as skipped. Confirmed by the user. | They are not ADRs. Counting them as skipped would mislead the agent. |
+| 60 | Accepted id forms | Digits only, trimmed: `"3"`, `"03"`, `"0003"` become `"0003"`. Ids above 9999 keep their digits. Anything else (`"ADR-3"`) is an unknown id with the list of ids. The same rule applies to `adr://{id}`. Confirmed by the user. | Exactly what FR-3 asks for. |
+| 61 | Duplicate ADR numbers (`0001-a.md`, `1-b.md`) | The first by path wins and a warning names both files. | Same rule as duplicate ticket ids (FR-12). |
+| 62 | Where the skip and missing-dir hints go | Text content only. `structuredContent` of `list_adrs` stays `{ adrs }` as in the ticket. `get_adr` names `--adr-dir` when the directory is missing. An empty `status` is no filter. | FR-15 and FR-16 ask for the text. An agent that sends optional fields as `""` still gets all ADRs (found in review). |
+| 63 | Status, date and sections | `Status`/`Date` bullets (`-`, `*`, `+`, bold allowed) count only before the first `##` heading, and an empty value counts as missing. A section runs to the next heading of level 1 or 2, so `###` stays inside it. Headings in code fences are ignored. Warnings fire on every call that reads the file. | A bullet in Consequences is not the ADR's status. Logging once per process would need state the sources must not hold (ADR 0004). |
+| 64 | Resource list | `adr://{id}` lists readable ADRs with name `ADR 0002` and the title. `withResourceList` in `result.ts` redacts uri, name and title and rethrows errors with a redacted message. It writes no audit line. | Titles come from file content and would otherwise reach the client unredacted. A listing is not a read (NFR-6). |
 
 ## Open points
 
@@ -333,10 +340,14 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (`https://token@host` is masked as an email instead), and phone formats with parentheses or
   without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
   (decision 46).
-- Tickets 05 and 06: every tool file uses `withAudit` and every resource uses `withResourceAudit`.
-  Consider an architecture test for this. Output schemas follow decision 56.
-- Tickets 05 and 06: sources should not put ids into exception messages. Unexpected errors are logged
-  with their redacted message (decision 52), and for resources that would put the id on stderr.
+- Ticket 06: output schemas follow decision 56, and sources do not put ids into exception messages
+  (decision 52). The architecture test now checks `withAudit`, `withResourceAudit` and
+  `withResourceList` (done in ticket 05).
+- Follow-up (ADR parser): ADRs in the Nygard/adr-tools format (`## Status` section, title
+  `# 1. Record …`) get status `Unknown` and keep the `1.` prefix. Supporting it changes FR-14 and
+  the parser; decide before ticket 10 whether the README should name it as a limitation.
+- Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
+  reports as missing. This is CommonMark behaviour; kept.
 - Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
   for calls the SDK rejects early (decision 57) needs a fix.
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,

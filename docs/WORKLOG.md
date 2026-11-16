@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 4 / 10 |
+| Tickets done | 5 / 10 |
 | Total time | 2,42 h |
-| Questions the agent asked before coding | 37 |
-| Agent mistakes caught in review | 23 |
+| Questions the agent asked before coding | 41 |
+| Agent mistakes caught in review | 28 |
 | Test coverage (src) | – |
 
 ## Template
@@ -216,6 +216,52 @@ Be honest: mistakes caught in review are the most valuable part.
   - Coverage, because `@vitest/coverage-v8` is not installed.
   - A CI run, which needs a push.
 - PR: #15
+
+### Ticket 05 – ADR tools and resource (2026-11-16)
+
+- Time: TODO
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding (one round, the user chose the recommended option for all):
+  - Text content format of `list_adrs` and `get_adr`: compact markdown (decision 58).
+  - Which files count as ADRs: `NNNN-*.md` directly in `--adr-dir` only (decision 59).
+  - Accepted id forms: digits only, no `ADR-` prefix (decision 60).
+  - Plan, test points and branch: confirmed.
+- Decisions made (and where recorded):
+  - Decisions 58 to 64 in `docs/requirements.md`. The agent took 61 to 64 under rule 7.
+  - Two parser follow-ups under Open points (Nygard-style ADRs, unclosed code fences).
+- Mistakes caught in review:
+  - `status: ""` filtered on an empty status and returned nothing. Agents often send optional
+    fields as empty strings. An empty status is now no filter.
+  - The resource `list` callback had no error handling. A `SafeFsError` would have reached the
+    client unredacted. `withResourceList` now rethrows with a redacted or generic message.
+  - `get_adr` on a missing ADR directory said "no ADRs" without naming `--adr-dir`, unlike
+    `list_adrs`. It now gives the same hint.
+  - The skipped-file error used the id unquoted while the other errors quoted it. Now consistent.
+  - The new architecture test demanded `withResourceList` in every resource file, so a static
+    resource without a list would have failed it. It now checks only files with a list callback.
+- Mistakes the agent caught itself:
+  - A wrong assumption about the SDK: it copies the template description into every listed
+    resource. The test assumed an exact entry. Our static text needs no redaction, so the test
+    now checks a subset.
+- Tested: 219 vitest tests, 47 of them in `test/adr.test.ts`, over `InMemoryTransport` against the
+  demo project and temp roots. They cover:
+  - AC3 (status filter in three casings), AC4 (`2`, `02`, `0002`, ` 2 `), AC10, AC13 (five
+    invalid or unknown ids), AC18 (demo 0004 with the template warning),
+  - a skipped file left out with "1 file skipped (too large)." and a tool error with the reason,
+    a missing ADR directory for both tools, `--adr-dir .`, drafts/README/subdirectories ignored,
+    a duplicate number, sorting past 9999,
+  - parser cases: no heading, no number prefix, bold bullets with CRLF, partial sections, `###`
+    inside a section, headings in code fences, a Status bullet in a later section, an empty
+    Status,
+  - redaction in `get_adr`, the raw resource and resource titles, one audit line per call without
+    arguments or ids, and nothing on stdout,
+  - architecture tests: every tool uses `withAudit`, every resource `withResourceAudit` and
+    `withResourceList`.
+- Not tested:
+  - Performance on 500 files (ticket 07) and a real stdio process (ticket 09).
+  - A `resources/list` failure end to end. Only `withResourceList` is tested on its own.
+  - Coverage, because `@vitest/coverage-v8` is not installed.
+- PR: #
 
 ## Skill improvements
 
