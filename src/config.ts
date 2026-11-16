@@ -1,8 +1,10 @@
 // Startup validation of root and source dirs. This module may use node:fs directly (see CLAUDE.md):
-// safe-fs needs a validated root before it can do anything.
-import { lstatSync, realpathSync, statSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+// safe-fs needs a validated root before it can do anything. The inside-root check is shared with
+// safe-fs, so there is one implementation of it.
+import { realpathSync, statSync } from 'node:fs';
+import { relative, resolve, sep } from 'node:path';
 import * as z from 'zod/v4';
+import { isInside, realpathOfNearestAncestor } from './fs/safe-fs.js';
 
 const ConfigInputSchema = z.object({
   root: z.string({ error: '--root is required' }).min(1, { error: '--root is required' }),
@@ -103,30 +105,6 @@ function checkSourceDir(root: string, input: string, flag: string): SourceDirRes
   return { ok: true, relPath, exists };
 }
 
-// Path-based instead of a prefix check, so root '/' and dir names like '..foo' work.
-function isInside(root: string, path: string): boolean {
-  const rel = relative(root, path);
-  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-}
-
 function errorCode(error: unknown): string {
   return (error as NodeJS.ErrnoException).code ?? String(error);
-}
-
-// Resolves symlinks in the longest existing prefix, so a missing dir below a symlink that points
-// outside root is still caught. Returns undefined for a broken symlink, whose target we cannot check.
-function realpathOfNearestAncestor(abs: string): { real: string; exists: boolean } | undefined {
-  const missing: string[] = [];
-  let current = abs;
-  while (true) {
-    try {
-      return { real: join(realpathSync(current), ...missing), exists: missing.length === 0 };
-    } catch {
-      if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) return undefined;
-      const parent = dirname(current);
-      if (parent === current) return { real: abs, exists: false };
-      missing.unshift(basename(current));
-      current = parent;
-    }
-  }
 }

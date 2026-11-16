@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 0 / 10 |
-| Total time | TODO |
-| Questions the agent asked before coding | 24 |
-| Agent mistakes caught in review | 0 |
+| Tickets done | 2 / 10 |
+| Total time | 1,25 h |
+| Questions the agent asked before coding | 31 |
+| Agent mistakes caught in review | 12 |
 | Test coverage (src) | – |
 
 ## Template
@@ -85,6 +85,39 @@ Be honest: mistakes caught in review are the most valuable part.
   carried only JSON-RPC, stderr only JSON lines.
 - Not tested: CI run (needs a push), Windows paths.
 - PR: #12
+
+### Ticket 02 – Safe file access (2026-11-16)
+
+- Time: 20 min
+- Skills used: implement-ticket, review subagent
+- Questions the agent asked before coding:
+  - Base branch while PR #12 was still open: wait for the merge (the user merged it meanwhile).
+  - Deny list and extension on the requested path, the symlink target, or both: both.
+  - `listFiles` and symlinks/oversized files: never enter symlinked dirs, list oversized files for FR-15.
+  - Whether to turn the "no `node:fs` elsewhere" review check into a test: yes.
+- Questions after review: EACCES handling (new reason `unreadable`), hard links (document),
+  check/read race (cap the read, document the symlink race), `.env*` directories (deny as segment).
+- Decisions made (and where recorded):
+  - Decisions 27 to 36 in `docs/requirements.md`; follow-ups under Open points; ticket 02 updated.
+- Mistakes caught in review:
+  - Security: the deny list compared names case-sensitively. On macOS `NODE_MODULES/x/readme.md`,
+    `.GIT/info.json` and `.ENV.json` were readable, breaking NFR-2. The ticket's examples were all
+    lower case, so no test failed. Fixed with case-insensitive matching and uppercase negative tests.
+  - Raw Node errors (EACCES) escaped with absolute host paths in the message, and one unreadable
+    subdirectory failed the whole listing. Now `SafeFsError('unreadable')`, entries are skipped.
+  - A file growing between `stat` and `readFile` bypassed the size limit. The read is now capped
+    on the open handle.
+  - `.env*` was denied as a file name but not as a directory, so `.env/lib/x.md` was readable.
+  - `readTextFile('.')` reported `extension` instead of `not_found`.
+  - `docs/architecture.md` still said `safeFs.ts`.
+  - The agent's own mistake while fixing: permission tests restored modes in `onTestFinished`,
+    which runs after `afterEach`, so cleanup failed. Moved the restore into `afterEach`.
+- Tested: 69 vitest tests, 34 of them for safe-fs with `mkdtemp` fixtures, symlinks, chmod 000
+  (skipped when running as root) and uppercase variants. The architecture test was checked against
+  a probe file that imports `node:fs`.
+- Not tested: the check/read race itself (no reliable test), hard links (documented as a limit),
+  Windows paths, CI run (needs a push).
+- PR: #13
 
 ## Skill improvements
 

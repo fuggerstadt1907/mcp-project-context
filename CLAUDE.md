@@ -14,7 +14,10 @@ Read `docs/requirements.md` and `docs/architecture.md` before any change. Decisi
 3. Write a short plan, then implement in small commits that each pass `pnpm check`.
 4. Every new behavior gets a test. Security behavior (path guard, redaction, write flag) gets negative tests.
 5. Open a PR that references the ticket. The PR description states what was tested and what was not.
-6. At the end of every ticket or requirements session, draft the WORKLOG entry yourself. Leave "Time" as TODO. The human reviews and confirms it before commit.
+6. At the end of every ticket or requirements session, draft the WORKLOG entry yourself and keep the
+   Summary table current. Leave "Time" as TODO. Propose a time in your final report instead:
+   measured from the start of the session to the PR, rounded up to 10 minutes. The human enters
+   the time by hand after the PR is created and reviewed.
 
 ## Hard rules
 

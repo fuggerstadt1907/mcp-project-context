@@ -29,14 +29,16 @@ existing ancestor, plus a broken-symlink check. Extract it into safe-fs and let 
 it, so there is one implementation of the root check.
 
 Throw a typed `SafeFsError` with a `reason` (`outside_root`, `denied`, `extension`, `too_large`,
-`not_found`). Tools turn it into a tool error later.
+`not_found`, `unreadable`). Tools turn it into a tool error later. `unreadable` was added in review
+for EACCES and other I/O errors (requirements decision 33). Edge-case reasons, symlink handling and
+known limits are in decisions 28 to 35.
 
 ## Acceptance criteria
 
-- [ ] Negative tests for every rule: `../secret.md`, `/etc/passwd`, a symlink inside root pointing
+- [x] Negative tests for every rule: `../secret.md`, `/etc/passwd`, a symlink inside root pointing
       outside, `.env`, `.git/config`, `node_modules/x/readme.md`, a `.ts` file, an oversized file.
-- [ ] Positive test: nested markdown file inside root is read.
-- [ ] `listFiles` never returns denied files and does not follow symlinked directories outside root.
-- [ ] Tests build their fixtures in a temp dir (`fs.mkdtemp`), not in the repo.
-- [ ] No other module imports `node:fs` for reading (check in review). Exception: `src/config.ts`
+- [x] Positive test: nested markdown file inside root is read.
+- [x] `listFiles` never returns denied files and does not follow symlinked directories outside root.
+- [x] Tests build their fixtures in a temp dir (`fs.mkdtemp`), not in the repo.
+- [x] No other module imports `node:fs` for reading (enforced by `test/architecture.test.ts`). Exception: `src/config.ts`
       for startup validation (CLAUDE.md), which reuses the extracted check.
