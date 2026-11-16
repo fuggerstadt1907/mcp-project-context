@@ -310,6 +310,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 46 | False positives of the broad patterns | Kept, so the patterns fail closed: `Token: see below`, `tokens: 100`, numbers with a leading 0 like `0042 1234`, and `git@github.com:…` are masked. Tests pin this behaviour. | Masking too much costs readability. A leak costs a secret. Narrowing the key match (e.g. skipping digit values) would let `password: 123456` through. |
 | 47 | IBAN matching | Any letter case, groups split by spaces or dashes, or compact. Valid only if the mod-97 checksum holds. If the match runs into the next word, trailing groups are dropped until it holds, cutting only at group ends. | Found in review: a lowercase IBAN leaked as a partial phone match, and `US12 3456 7890 1234` was masked. A cut inside a group left one digit visible. |
 | 48 | Private key without an END line | Masked from `BEGIN` to the end of the text. | Pasted or truncated fragments must not leak. Found in review. |
+| 49 | `Authorization` headers and credentials in URLs | Two new types. `auth_header` masks the credential after `Bearer`/`Basic` (either case) if it is at least 8 characters with a digit. A JWT there keeps the `jwt` type. `url_credentials` masks `user:password` in `scheme://user:password@host` and runs before `email`. A URL without credentials stays unchanged. | Asked for by the user after the review. The digit rule keeps prose like "Basic authentication" readable. |
 
 ## Open points
 
@@ -319,10 +320,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
 - Follow-up (safe-fs): `--root` given in a different letter case than on disk keeps that spelling, so
   absolute symlinks inside root may be rejected as `outside_root`. Fails closed; `realpathSync.native`
   for root would fix it.
-- Ticket 10: README Limitations must name what redaction does not catch: `Authorization: Bearer`/`Basic`
-  values without a secret key name, credentials in URLs (`postgres://user:pw@host`), `sk_live_…`,
-  `ASIA…` keys, and phone formats with parentheses or without separators (`(0821) 123456`,
-  `01701234567`). Also the false positives kept on purpose (decision 46).
+- Ticket 10: README Limitations must name what redaction does not catch: `sk_live_…` and `ASIA…`
+  keys, `Bearer`/`Basic` credentials without a digit, a user name alone in a URL
+  (`https://token@host` is masked as an email instead), and phone formats with parentheses or
+  without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
+  (decision 46).
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.
 - Follow-up (test): the 100 KB timing tests in `test/redact.test.ts` use a 500 ms limit, against

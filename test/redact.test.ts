@@ -60,6 +60,44 @@ describe('redact', () => {
     expect(result.findings.map((f) => f.type)).toEqual([type]);
   });
 
+  it.each([
+    [
+      'auth_header',
+      fake('Authorization: Bearer ', 'abc123DEF456ghi789'),
+      'Authorization: Bearer [REDACTED:auth_header]',
+    ],
+    [
+      'auth_header',
+      fake('curl -H "Authorization: Basic ', 'dXNlcjpwYXNzd29yZA==', '"'),
+      'curl -H "Authorization: Basic [REDACTED:auth_header]"',
+    ],
+    [
+      'auth_header',
+      fake('authorization: bearer ', 'opaque-token-42'),
+      'authorization: bearer [REDACTED:auth_header]',
+    ],
+    [
+      'url_credentials',
+      fake('DATABASE_URL postgres://app:', 's3cret@db.internal:5432/app'),
+      'DATABASE_URL postgres://[REDACTED:url_credentials]@db.internal:5432/app',
+    ],
+    [
+      'url_credentials',
+      fake('see https://bob:', 'hunter2@example.com/x'),
+      'see https://[REDACTED:url_credentials]@example.com/x',
+    ],
+  ])('masks %s', (type, input, expected) => {
+    const result = redact(input);
+    expect(result.text).toBe(expected);
+    expect(result.findings.map((f) => f.type)).toEqual([type]);
+  });
+
+  it('keeps the jwt type for a JWT after Bearer', () => {
+    expect(redact(`Authorization: Bearer ${JWT}`).text).toBe(
+      'Authorization: Bearer [REDACTED:jwt]',
+    );
+  });
+
   // Review findings: forms where the first version left all or part of the value visible.
   it.each([
     ['password = "correct horse battery"', 'password = "[REDACTED:assignment]"'],
@@ -92,6 +130,8 @@ describe('redact', () => {
     ['an already redacted value', 'password: [REDACTED:email]'],
     ['a key name followed by a line break', '## Password:\n\nUse the magic link.'],
     ['IBAN-shaped text with a wrong checksum', 'HASH AB12CDEF1234567890 and US12 3456 7890 1234'],
+    ['a URL without credentials', 'see https://example.com:8443/path/to?q=1&user=me#top'],
+    ['prose about auth schemes', 'Basic authentication and Bearer tokens are both supported.'],
   ])('leaves %s unchanged', (_name, input) => {
     expect(redact(input)).toEqual({ text: input, findings: [] });
   });

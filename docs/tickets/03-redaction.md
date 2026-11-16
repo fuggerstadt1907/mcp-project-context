@@ -32,7 +32,7 @@ Pattern table (one entry per type, easy to extend):
 Replacement: `[REDACTED:<type>]`. `index` is the offset in the original text. When matches overlap,
 the specific type wins over `assignment`, and `redact()` is idempotent. The forms each type
 catches, the false positives kept on purpose and the runtime bounds are in requirements decisions
-37 to 39 and 41 to 48.
+37 to 39 and 41 to 49. Decision 49 adds `auth_header` and `url_credentials`.
 
 ## Acceptance criteria
 

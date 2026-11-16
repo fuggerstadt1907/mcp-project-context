@@ -69,6 +69,20 @@ const PATTERNS: Pattern[] = [
   { type: 'slack_token', regex: /\bxox[abposr]-[A-Za-z0-9-]{10,}/g },
   { type: 'jwt', regex: /\beyJ[\w-]+\.[\w-]+\.[\w-]+/g },
   {
+    type: 'auth_header',
+    // The credential after `Bearer` or `Basic`, with at least one digit so prose like
+    // "Basic authentication" stays. A JWT keeps its own type (jwt runs first).
+    regex: /\b(?:[Bb]earer|[Bb]asic)[ \t]+((?=[\w.~+/-]{0,512}\d)[\w.~+/-]{8,512}=*)/dg,
+    span: (match) => match.indices?.[1],
+  },
+  {
+    type: 'url_credentials',
+    // `user:password` in `scheme://user:password@host`. Runs before email, which would match
+    // `password@host`.
+    regex: /\b[A-Za-z][A-Za-z0-9+.-]{0,20}:\/\/([^\s:/@]{1,256}:[^\s/@]{1,256})@/dg,
+    span: (match) => match.indices?.[1],
+  },
+  {
     type: 'email',
     regex: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}\b/g,
   },
