@@ -423,7 +423,7 @@ Be honest: mistakes caught in review are the most valuable part.
   - The performance limit on slower machines or CI; measured only on this laptop.
   - Search quality on a real repository beyond the demo and the fixtures.
   - Over-masking of `(score N)` after a title ending in `password:` (noted as a follow-up).
-- PR: #
+- PR: #20
 
 ## Skill improvements
 
