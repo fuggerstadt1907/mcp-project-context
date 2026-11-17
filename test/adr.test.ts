@@ -465,6 +465,83 @@ describe('ADR formats (FR-17)', () => {
     expect((await getAdr('# X\n\n## Context\n\nDate: 2026-03-03\n')).date).toBe('');
   });
 
+  it('reads status and date from MADR frontmatter and keeps it out of every field', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: accepted\ndate: 2026-01-01\ndeciders: [Jane, Joe]\n---\n# Use Postgres\n\nWe need a DB.\n',
+    );
+
+    expect(parsed).toMatchObject({
+      title: 'Use Postgres',
+      status: 'accepted',
+      date: '2026-01-01',
+      context: 'We need a DB.',
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/deciders|---/);
+  });
+
+  it('prefers frontmatter to a bullet and a Status section', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: "superseded by ADR-0009"\ndate: 2026-05-05\n---\n# X\n\n- Status: Accepted\n- Date: 2026-01-01\n\n## Status\n\nProposed\n',
+    );
+    expect(parsed).toMatchObject({ status: 'superseded', date: '2026-05-05' });
+  });
+
+  it.each([
+    ['status: []', 'Proposed'],
+    ['status: [a, b]', 'Proposed'],
+    ['status:', 'Proposed'],
+    ['date: 2026-01-01', 'Proposed'],
+  ])('falls back to the bullet for frontmatter %j', async (line, status) => {
+    const parsed = await getAdr(`---\n${line}\n---\n# X\n\n- Status: Proposed\n`);
+    expect(parsed.status).toBe(status);
+  });
+
+  it('lists an ADR with frontmatter outside the subset and warns without content', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-x.md':
+        '---\nstatus: accepted\ndeciders:\n  - secret-name\n---\n# X\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n',
+    });
+
+    const listed = await call(root, 'list_adrs');
+    const fetched = await call(root, 'get_adr', { id: '1' });
+
+    expect(listed.structuredContent).toEqual({
+      adrs: [{ id: '0001', title: 'X', status: 'Proposed', date: '' }],
+    });
+    expect(fetched.structuredContent).toMatchObject({ status: 'Proposed', context: 'Why.' });
+    expect(JSON.stringify(fetched.structuredContent)).not.toContain('secret-name');
+    expect(logLines()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        msg: 'ADR frontmatter ignored',
+        path: 'docs/adr/0001-x.md',
+        line: 4,
+        problem: 'not a `key: value` line',
+      }),
+    );
+    expect(stderr()).not.toContain('secret-name');
+  });
+
+  it('reads a file without a closing --- line as plain markdown', async () => {
+    const parsed = await getAdr('---\n# X\n\n- Status: Accepted\n');
+    expect(parsed).toMatchObject({ title: 'X', status: 'Accepted' });
+    expect(logLines().filter((line) => line.msg === 'ADR frontmatter ignored')).toEqual([]);
+  });
+
+  it('finds ADRs of all three formats by status', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-bullet.md': adr('0001: Bullet', 'Accepted'),
+      'docs/adr/0002-nygard.md': nygard('2. Nygard', 'Accepted'),
+      'docs/adr/0003-madr.md': '---\nstatus: accepted\n---\n# MADR\n',
+      'docs/adr/0004-other.md': nygard('4. Other', 'Proposed'),
+    });
+
+    const result = await call(root, 'list_adrs', { status: 'accepted' });
+
+    const ids = (result.structuredContent as { adrs: { id: string }[] }).adrs.map((a) => a.id);
+    expect(ids).toEqual(['0001', '0002', '0003']);
+  });
+
   it('keeps the Status section out of the context fallback', async () => {
     const parsed = await getAdr(
       '# 1. X\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n\n## Notes\n\nFree text.\n',

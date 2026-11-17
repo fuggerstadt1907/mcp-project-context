@@ -113,6 +113,15 @@ describe('parseFrontmatter', () => {
       kind: 'invalid',
       line: 3,
       problem: 'quoted value without closing quote',
+      body: 'Body.\n',
+    });
+  });
+
+  it('gives no body when the closing --- line is missing', () => {
+    expect(parseFrontmatter('---\nid: T-1\n')).toEqual({
+      kind: 'invalid',
+      line: 1,
+      problem: 'no closing --- line',
     });
   });
 });

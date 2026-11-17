@@ -2,6 +2,7 @@
 // drafts/, other subdirectories and files like README.md are ignored. Read on every call (ADR 0004).
 import { type SafeFs, SafeFsError, type SafeFsReason } from '../fs/safe-fs.js';
 import { log } from '../log.js';
+import { parseFrontmatter } from './frontmatter.js';
 import { findHeadings, type Heading } from './markdown.js';
 
 export interface Adr {
@@ -136,7 +137,8 @@ function compareIds(a: string, b: string): number {
  * (requirements decision 4) and a warning names what is missing.
  */
 function parseAdr(file: AdrFile, markdown: string): Adr {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const frontmatter = readFrontmatter(file, markdown);
+  const lines = frontmatter.body.replace(/\r\n?/g, '\n').split('\n');
   const headings = findHeadings(lines);
 
   const titleHeading = headings.find((heading) => heading.level === 1);
@@ -147,8 +149,10 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
   const firstSection = headings.find((heading) => heading.level >= 2)?.line ?? lines.length;
   const header = lines.slice(0, firstSection);
   const statusSection = section(lines, headings, 'status');
-  const status = cutBy(bullet(header, 'status') ?? firstLine(statusSection?.text));
-  const date = bullet(header, 'date') ?? dateLine(header) ?? '';
+  const status = cutBy(
+    frontmatter.status ?? bullet(header, 'status') ?? firstLine(statusSection?.text),
+  );
+  const date = frontmatter.date ?? bullet(header, 'date') ?? dateLine(header) ?? '';
 
   const sections: Record<(typeof SECTIONS)[number], string | undefined> = {
     context: undefined,
@@ -194,6 +198,31 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
     decision: sections.decision ?? '',
     consequences: sections.consequences ?? '',
   };
+}
+
+// MADR 3 frontmatter. Only `status` and `date` are read; an array or empty value counts as missing.
+// Frontmatter outside the subset is ignored with a warning, the ADR is still listed (FR-14).
+function readFrontmatter(
+  file: AdrFile,
+  markdown: string,
+): { body: string; status?: string | undefined; date?: string | undefined } {
+  const result = parseFrontmatter(markdown);
+  if (result.kind === 'none') return { body: markdown };
+  if (result.kind === 'invalid') {
+    // Without a closing line the `---` is probably a thematic break, not frontmatter.
+    if (result.body === undefined) return { body: markdown };
+    log.warn('ADR frontmatter ignored', {
+      path: file.path,
+      line: result.line,
+      problem: result.problem,
+    });
+    return { body: result.body };
+  }
+  const text = (key: string) => {
+    const value = result.data[key];
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+  };
+  return { body: result.body, status: text('status'), date: text('date') };
 }
 
 // `- Status: Accepted`, also with `*` or `+` bullets and `**Status**:` in bold.
