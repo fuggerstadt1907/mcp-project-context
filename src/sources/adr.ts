@@ -49,6 +49,15 @@ interface AdrFile {
 
 const FILE_NAME = /^(\d+)-(.+)\.md$/i;
 const SECTIONS = ['context', 'decision', 'consequences'] as const;
+type Section = (typeof SECTIONS)[number];
+// Section headings (any case), including the MADR 3 names.
+const SECTION_NAMES: Record<string, Section> = Object.assign(Object.create(null), {
+  context: 'context',
+  'context and problem statement': 'context',
+  decision: 'decision',
+  'decision outcome': 'decision',
+  consequences: 'consequences',
+});
 
 /** `"3"`, `"03"` and `"0003"` all become `"0003"`. Anything that is not only digits is undefined. */
 export function normalizeAdrId(input: string): string | undefined {
@@ -154,25 +163,49 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
   );
   const date = frontmatter.date ?? bullet(header, 'date') ?? dateLine(header) ?? '';
 
-  const sections: Record<(typeof SECTIONS)[number], string | undefined> = {
+  const sections: Record<Section, string | undefined> = {
     context: undefined,
     decision: undefined,
     consequences: undefined,
   };
+  // MADR's `## Decision Outcome`, if that is where the decision came from.
+  let outcome: { index: number; end: number } | undefined;
   for (const [index, heading] of headings.entries()) {
-    const name = heading.text.toLowerCase() as (typeof SECTIONS)[number];
-    if (heading.level !== 2 || !SECTIONS.includes(name) || sections[name] !== undefined) continue;
-    const end = headings.slice(index + 1).find((next) => next.level <= 2)?.line ?? lines.length;
-    sections[name] = lines
-      .slice(heading.line + 1, end)
-      .join('\n')
-      .trim();
+    const name = SECTION_NAMES[heading.text.toLowerCase()];
+    if (heading.level !== 2 || name === undefined || sections[name] !== undefined) continue;
+    const end = sectionEnd(lines, headings, index);
+    sections[name] = text(lines, heading.line + 1, end);
+    if (heading.text.toLowerCase() === 'decision outcome') outcome = { index, end };
+  }
+
+  // MADR keeps consequences as `### Consequences` inside Decision Outcome. A `## Consequences`
+  // section wins, and Decision Outcome then stays whole.
+  if (outcome && sections.consequences === undefined) {
+    const start = (headings[outcome.index] as Heading).line;
+    const subIndex = headings.findIndex(
+      (heading, index) =>
+        index > outcome.index &&
+        heading.line < outcome.end &&
+        heading.level === 3 &&
+        heading.text.toLowerCase() === 'consequences',
+    );
+    const sub = headings[subIndex];
+    if (sub) {
+      const subEnd = sectionEnd(lines, headings, subIndex);
+      sections.consequences = text(lines, sub.line + 1, subEnd);
+      sections.decision = [...lines.slice(start + 1, sub.line), ...lines.slice(subEnd, outcome.end)]
+        .join('\n')
+        .trim();
+    }
   }
 
   const missing = [
     ...(titleHeading ? [] : ['title']),
     ...(status === undefined ? ['status'] : []),
-    ...SECTIONS.filter((name) => sections[name] === undefined),
+    // Consequences are optional in MADR.
+    ...SECTIONS.filter(
+      (name) => sections[name] === undefined && !(name === 'consequences' && outcome),
+    ),
   ];
   if (missing.length > 0) {
     log.warn('ADR does not follow the template', { path: file.path, missing });
@@ -267,8 +300,18 @@ function section(
   );
   const heading = headings[index];
   if (!heading) return undefined;
-  const end = headings.slice(index + 1).find((next) => next.level <= 2)?.line ?? lines.length;
-  return { start: heading.line, end, text: lines.slice(heading.line + 1, end).join('\n') };
+  const end = sectionEnd(lines, headings, index);
+  return { start: heading.line, end, text: text(lines, heading.line + 1, end) };
+}
+
+// A section runs to the next heading of the same or a higher level.
+function sectionEnd(lines: string[], headings: Heading[], index: number): number {
+  const level = (headings[index] as Heading).level;
+  return headings.slice(index + 1).find((next) => next.level <= level)?.line ?? lines.length;
+}
+
+function text(lines: string[], start: number, end: number): string {
+  return lines.slice(start, end).join('\n').trim();
 }
 
 // adr-tools writes the status first and may add `Supersedes …` lines below it.

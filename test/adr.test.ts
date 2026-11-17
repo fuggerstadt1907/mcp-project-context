@@ -542,6 +542,54 @@ describe('ADR formats (FR-17)', () => {
     expect(ids).toEqual(['0001', '0002', '0003']);
   });
 
+  it('maps the MADR sections and splits off ### Consequences', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: accepted\ndate: 2026-01-01\n---\n# Use Postgres\n\n' +
+        '## Context and Problem Statement\n\nWe need a DB.\n\n' +
+        '## Considered Options\n\n* Postgres\n* MySQL\n\n' +
+        '## Decision Outcome\n\nChosen option: "Postgres".\n\n' +
+        '### Consequences\n\n* Good, because known.\n\n' +
+        '### Confirmation\n\nReview.\n\n' +
+        '## Pros and Cons of the Options\n\nMany.\n',
+    );
+
+    expect(parsed).toEqual({
+      id: '0007',
+      title: 'Use Postgres',
+      status: 'accepted',
+      date: '2026-01-01',
+      context: 'We need a DB.',
+      decision: 'Chosen option: "Postgres".\n\n### Confirmation\n\nReview.',
+      consequences: '* Good, because known.',
+    });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('does not warn about missing consequences when Decision Outcome is there', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: proposed\n---\n# X\n\n## Context and Problem Statement\n\nA.\n\n## Decision Outcome\n\nB.\n',
+    );
+    expect(parsed).toMatchObject({ context: 'A.', decision: 'B.', consequences: '' });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('keeps Decision Outcome whole when there is a ## Consequences section', async () => {
+    const parsed = await getAdr(
+      '# X\n\n- Status: Accepted\n\n## Context\n\nA.\n\n## Decision Outcome\n\nB.\n\n### Consequences\n\nC.\n\n## Consequences\n\nD.\n',
+    );
+    expect(parsed).toMatchObject({
+      decision: 'B.\n\n### Consequences\n\nC.',
+      consequences: 'D.',
+    });
+  });
+
+  it('still warns about a missing consequences section next to ## Decision', async () => {
+    await getAdr('# X\n\n- Status: Accepted\n\n## Context\n\nA.\n\n## Decision\n\nB.\n');
+    expect(templateWarnings()).toContainEqual(
+      expect.objectContaining({ missing: ['consequences'] }),
+    );
+  });
+
   it('keeps the Status section out of the context fallback', async () => {
     const parsed = await getAdr(
       '# 1. X\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n\n## Notes\n\nFree text.\n',
