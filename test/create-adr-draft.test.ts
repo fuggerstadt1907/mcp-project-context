@@ -1,4 +1,11 @@
-import { chmodSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { type CallToolResult, InMemoryTransport, McpServer } from '@modelcontextprotocol/server';
@@ -222,6 +229,8 @@ describe('create_adr_draft', () => {
     // Another process creates the target between numbering and write: listNames does not see it yet.
     mkdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'), { recursive: true });
     symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/adr/drafts/0002-other.md'));
+    const original = '# 0002: Kept\n\nWritten by someone else.\n';
+    writeFileSync(join(root, 'docs/adr/drafts/0002-kept.md'), original);
     const real = createSafeFs({ root, maxFileKb: 256 });
     const racing: SafeFs = {
       ...real,
@@ -245,14 +254,19 @@ describe('create_adr_draft', () => {
       name: 'create_adr_draft',
       arguments: draft({ title: 'Other' }),
     })) as CallToolResult;
+    const file = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft({ title: 'Kept' }),
+    })) as CallToolResult;
     await client.close();
 
-    for (const result of [dir, link]) {
+    for (const result of [dir, link, file]) {
       expect(result.isError).toBe(true);
       expect(text(result)).toMatch(/already exists\. Nothing was written\./);
     }
     expect(text(dir)).toContain('docs/adr/drafts/0002-use-postgres.md');
-    expect(drafts(root)).toEqual(['0002-other.md', '0002-use-postgres.md']);
+    expect(drafts(root)).toEqual(['0002-kept.md', '0002-other.md', '0002-use-postgres.md']);
+    expect(readFileSync(join(root, 'docs/adr/drafts/0002-kept.md'), 'utf8')).toBe(original);
     expect(readdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'))).toEqual([]);
     expect(readdirSync(root)).not.toContain('nowhere.md');
   });
@@ -333,6 +347,13 @@ describe('create_adr_draft', () => {
     expect(JSON.stringify(result)).not.toMatch(new RegExp(key, 'i'));
     const content = readFileSync(join(root, structured(result).path), 'utf8');
     expect(content).toContain(`# 0002: Rotate ${key} now`);
+    // The audit line counts the masked key (title in text and structuredContent) and holds no
+    // part of the title or the slug.
+    const audit = logLines().filter((line) => line.msg === 'audit');
+    expect(audit).toEqual([
+      expect.objectContaining({ tool: 'create_adr_draft', ok: true, redactions: 2 }),
+    ]);
+    expect(JSON.stringify(audit)).not.toMatch(new RegExp(`${key}|rotate|aws-key`, 'i'));
   });
 
   it('keeps a title like ../../evil inside drafts/', async () => {
