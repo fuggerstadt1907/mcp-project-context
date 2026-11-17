@@ -22,9 +22,10 @@ The agent can read the team's rules and search across all project knowledge.
 
 ## Decisions
 
-Recorded as requirements decisions 80–85: snippets never cut a secret and keep line breaks
-(80), overlapping `assignment` matches are merged in `redact()` (81), text content (82), search
-details (83), convention files (84), running the performance test on its own (85).
+Recorded as requirements decisions 80–86: snippets never cut a secret and keep line breaks
+(80), overlapping matches are merged in `redact()` (81), text content (82), search
+details (83), convention files (84), running the performance test on its own (85), the overlap invariant
+for `redact()` (86).
 
 ## Acceptance criteria
 
