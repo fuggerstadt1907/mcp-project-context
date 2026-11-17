@@ -8,9 +8,9 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 9 / 11 |
-| Total time | 6,75 h |
+| Total time | 7,75 h |
 | Questions the agent asked before coding | 59 |
-| Agent mistakes caught in review | 43 |
+| Agent mistakes caught in review | 45 |
 | Test coverage (src) | – |
 
 ## Template
@@ -427,7 +427,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 08 – Write tool behind a flag (2026-11-17)
 
-- Time: TODO
+- Time: 1 h
 - Skills used: implement-ticket
 - Questions the agent asked before coding: 3, in one round, plus a confirmation of the plan:
   - Two parallel calls with different titles both took number 0006, because `wx` only catches
@@ -438,9 +438,9 @@ Be honest: mistakes caught in review are the most valuable part.
 - Question after the review: a secret in the title reached the file name. The user chose to
   redact the title before turning it into a slug (decision 90).
 - Decisions made (and where recorded):
-  - Decisions 87–92 in `docs/requirements.md`. 91 (numbering by name) and 92 (file layout,
+  - Decisions 87–93 in `docs/requirements.md`. 91 (numbering by name) and 92 (file layout,
     title limits, size limit on write, new reasons `exists` and `unwritable`) were taken by the
-    agent under rule 7.
+    agent under rule 7. 93 (strict input schema) came from the user's criteria before the PR.
   - `safe-fs.ts` gained `writeTextFile` (exclusive create, the only write path) and `listNames`.
 - Mistakes caught in review (fresh subagent):
   - Numbering counted only files `listFiles` returned. An unreadable ADR or drafts behind a
@@ -450,15 +450,35 @@ Be honest: mistakes caught in review are the most valuable part.
     and the returned path. The title is now redacted before slugify (decision 90).
   - A file number beyond 2^53 produced an id like `1e+22`. Such numbers are now ignored.
   - With `--adr-dir .` the text said "move it to ./". It now names the project root.
-- Agent check: the queue was taken out once to confirm that the parallel test then fails.
-- Tested: 46 new vitest tests, in `test/create-adr-draft.test.ts` and `test/safe-fs.test.ts`,
-  over `InMemoryTransport` + `Client` for the tool. They cover:
+- Gaps found by the user's own criteria for the stage, checked before the PR:
+  - The input schema used `z.object`, which drops unknown keys. A call with
+    `status: "Accepted"` succeeded and wrote `Proposed`, so the agent was told nothing. Now
+    `z.strictObject`; the call is rejected and writes nothing (decision 93).
+  - AC12 at tool level had no case with a regular file at the target, and the slug-secret test
+    did not check the audit line. Both added.
+- Agent checks: the queue, the strict schema and the write rule in the architecture test were
+  each broken on purpose once to confirm that their tests then fail.
+- Tested: 85 new vitest tests (1002 → 1087), in `test/create-adr-draft.test.ts`,
+  `test/safe-fs.test.ts` and `test/architecture.test.ts`, over `InMemoryTransport` + `Client`
+  for the tool. They cover:
   - AC11, AC24 and registration with the flag and its annotations.
   - AC12 with 10 parallel calls, and a target that appears between numbering and write
-    (simulated with a `listNames` that cannot see it yet), for a directory and a broken symlink.
+    (simulated with a `listNames` that cannot see it yet), for a regular file, a directory and a
+    broken symlink.
   - `../../evil`, the raw file content against the redacted result, a secret in the slug, and a
     missing ADR directory.
   - A `drafts/` symlink pointing outside root, invalid titles, the size limit, and the audit line.
+  - A snapshot of the whole temp root before and after a call: exactly one new file, in
+    `drafts/`, for a normal title and for `../../evil`.
+  - Hostile titles (NUL, emoji only, 500 and 200 characters, empty, `a/b`, `..\\x`, dots, a line
+    break): a file named `^\d{4}-[a-z0-9-]+\.md$` with a slug of at most 60 characters, or a
+    clean tool error, and nothing else.
+  - Unknown input fields (`status`, `date`, `id`, `path`) are rejected and change nothing; the
+    file always says `Status: Proposed`.
+  - A unique marker in every input field never reaches stderr; the secret-in-slug call writes
+    one audit line with `redactions: 2`.
+  - Architecture: only `safe-fs.ts` calls a file system write (writeFile, appendFile, mkdir,
+    rename, rm, unlink, open with a write flag, and more).
   - A batch with failing calls that does not block the queue, and `get_adr` on a promoted draft
     without warnings.
   - safe-fs negative tests for `writeTextFile` (outside root, symlinked parent, deny list,

@@ -17,9 +17,9 @@ With explicit opt-in, the agent can propose a new decision as an ADR draft.
 
 ## Decisions
 
-Recorded as requirements decisions 87–92: parallel calls are serialised (87), missing ADR
+Recorded as requirements decisions 87–93: parallel calls are serialised (87), missing ADR
 directory (88), output (89), slug with redaction first (90), numbering by name (91), file and
-input details (92).
+input details (92), strict input schema (93).
 
 ## Acceptance criteria
 
