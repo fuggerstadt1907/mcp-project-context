@@ -1,6 +1,6 @@
 # Requirements: mcp-project-context
 
-> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-16
+> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-17
 
 Version 0.2 · Owner: Alessandro Orlandi
 
@@ -157,15 +157,16 @@ No database. The data model is the parsed markdown.
 Checklist items under `## Acceptance criteria` become `acceptanceCriteria`.
 
 **Frontmatter subset.** Frontmatter is the block between a `---` line at the very top of the file and
-the next `---` line. Each line in it must have the form `key: value`, where the value is one of:
+the next `---` line. Blank lines and lines starting with `#` (comments) are skipped. Every other
+line must have the form `key: value`, where the value is one of:
 
 - a plain string, trimmed: `status: todo`
 - a quoted string in double or single quotes: `title: "Rate-limit: magic links"`, `title: 'x'`
 - an inline array of items, each plain or quoted by the same rules: `labels: [api, "a, b"]`;
   `[]` is an empty list
 
-Everything else is outside the subset: block lists (`- item`), nesting, multi-line values and any
-other YAML syntax. A ticket with such frontmatter is skipped with a warning. `id` is required.
+Everything else is outside the subset: block lists (`- item`), nesting, multi-line values, a
+comment after a value and any other YAML syntax. A ticket with such frontmatter is skipped with a warning. `id` is required.
 `title` and `status` default to an empty string and `labels` to an empty list. Unknown keys that
 fit the syntax are ignored. All four demo tickets must parse.
 
@@ -227,7 +228,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 04 Result helper and audit | FR-10, NFR-6 | done · 2026-11-16 · ticket-04-result-helper-audit |
 | 05 ADR tools | FR-2, FR-3, FR-8 (adr), FR-11, FR-14, FR-15 | done · 2026-11-16 · ticket-05-adr-tools |
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | done · 2026-11-16 · ticket-06-ticket-tools |
-| 05b ADR format variants (#16) | FR-14, FR-17 | open |
+| 05b ADR format variants (#16) | FR-14, FR-17 | done · 2026-11-17 · ticket-05b-adr-formats |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | open |
 | 08 Write tool | FR-9, NFR-4 | open |
 | 09 Integration tests | Goal, AC25, AC29 | open |
@@ -342,6 +343,8 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 75 | ADR frontmatter outside the subset | The ADR is listed, the frontmatter is ignored and status and date come from the other sources (else `Unknown`). A warning gives path, line and problem, never content. The block up to the closing `---` stays out of every field; without a closing line the file is read as if it had no frontmatter. Confirmed by the user. | FR-14: an ADR off the template is still listed. Skipping it like a ticket would hide an ADR because of one comment line. |
 | 76 | MADR section names | Mapped: `## Context and Problem Statement` → context, `## Decision Outcome` → decision. A `### Consequences` inside Decision Outcome becomes consequences and is removed from decision. Other MADR sections (`Considered Options`, `Pros and Cons …`) are not returned by `get_adr`. When `Decision Outcome` is present, a missing consequences section is not warned about. Confirmed by the user. | Without the mapping every MADR ADR would warn and put its whole body into `context`. Consequences are optional in MADR. |
 | 77 | ADR format parsing details | The `## Status` section gives its first non-empty line; later lines (`Supersedes …`) are ignored, an empty section counts as missing. A plain `Date:` line (bold allowed) counts only before the first `##` heading. The cut of decision 74 is case-insensitive and needs text after `by`. Title prefixes stripped: `^\d+\s*:\s*` and `^\d+\.\s+` (so `1.5 release` stays). From the frontmatter only `status` and `date` are read; other keys are ignored, and an array value counts as missing. Sections, title and the context fallback are read from the body after the frontmatter. The template warning counts status as present from any source. Decided by the agent under rule 7. | Matches adr-tools output, where the status line comes first. A title like `1.5 release` is not a numbered heading. |
+| 78 | MADR consequences and other 05b details | A `### Consequences` inside Decision Outcome runs to the next heading of level 3 or higher, so `### Confirmation` stays in decision. If the file also has a `## Consequences` section, that one wins and Decision Outcome stays whole. The `Date:` line is matched case-sensitively (bold allowed). A file that starts with a thematic break `---` and has a later `---` is read as invalid frontmatter: the lines in between are dropped and a warning is logged. Decided by the agent under rule 7; the last two came from the review. | Matches the MADR 3 layout. A lowercase `date:` line from an unclosed frontmatter block would otherwise become the date. Decision 75 asks for the thematic-break behaviour as written, and a test pins it. |
+| 79 | Comment lines in frontmatter | Lines whose first character is `#` are skipped, for tickets and ADRs. A comment after a value (` #`) and an indented comment stay outside the subset. This changes decision 71. Decided by the user after the 05b review. | The stock MADR 3 template starts its frontmatter with a comment line. Without this change such ADRs showed status `Unknown`. YAML reads full-line comments the same way, so the subset stays strict. |
 
 ## Open points
 
@@ -363,6 +366,10 @@ Each ticket is testable on its own with `InMemoryTransport`.
 - Ticket 10: README documents the frontmatter subset, the allowed ticket id characters
   (decision 69) and that `README.md` files under `--tickets-dir` are ignored.
 - Ticket 10: README documents the supported ADR formats (bullet, Nygard, MADR 3) with the source
-  order and the `X by …` cut (decisions 73–77).
+  order and the `X by …` cut (decisions 73–79), and that a leading `---` thematic break is read as
+  frontmatter.
+- Follow-up (ADR parser): the first non-empty line of a `## Status` section is taken as written, so
+  `### Accepted` or a code fence there becomes the status. adr-tools never writes that. Strip
+  heading markers if a real ADR needs it.
 - Follow-up (redact): the overlap check is O(findings²). It takes about 100 ms for 14,000 findings,
   which is fine at the current file sizes. Use a sorted interval list if `--max-file-kb` grows a lot.

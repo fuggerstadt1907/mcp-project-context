@@ -50,22 +50,23 @@ adr-tools (Nygard) or MADR 3 ADR is listed with status `Unknown` (requirements d
 Resolved in grilling, recorded as requirements decisions 73–77 (FR-17 and the edge-case rows are
 updated): source order frontmatter → bullet → `## Status` without a conflict warning (73), the
 `X by …` cut (74), frontmatter outside the subset (75), MADR section mapping (76), parsing details
-(77). README documentation of the formats moves to ticket 10.
+(77). README documentation of the formats moves to ticket 10. During implementation:
+MADR consequences details and the case-sensitive `Date:` line (78), comment lines in frontmatter (79).
 
 ## Acceptance criteria
 
-- [ ] A bullet-style ADR (`- Status: Accepted`) still returns `Accepted` (no regression on the demo).
-- [ ] A Nygard ADR (`# 1. Record …`, `Date:` line, `## Status` section with `Accepted`) returns
+- [x] A bullet-style ADR (`- Status: Accepted`) still returns `Accepted` (no regression on the demo).
+- [x] A Nygard ADR (`# 1. Record …`, `Date:` line, `## Status` section with `Accepted`) returns
       title `Record …`, status `Accepted` and the date.
-- [ ] A MADR 3 ADR with frontmatter `status: accepted` returns status `accepted`, the frontmatter
+- [x] A MADR 3 ADR with frontmatter `status: accepted` returns status `accepted`, the frontmatter
       date, and no frontmatter in any field.
-- [ ] `list_adrs({ status: "accepted" })` finds ADRs of all three formats.
-- [ ] No template warning for any of the three formats when all their parts are present.
-- [ ] A Nygard ADR with `Superseded by [2. Use X](0002-use-x.md)` returns status `Superseded` and
+- [x] `list_adrs({ status: "accepted" })` finds ADRs of all three formats.
+- [x] No template warning for any of the three formats when all their parts are present.
+- [x] A Nygard ADR with `Superseded by [2. Use X](0002-use-x.md)` returns status `Superseded` and
       is found by `list_adrs({ status: "superseded" })`.
-- [ ] A MADR ADR returns its `Context and Problem Statement` as context, `Decision Outcome` as
+- [x] A MADR ADR returns its `Context and Problem Statement` as context, `Decision Outcome` as
       decision without the `### Consequences` part, and that part as consequences.
-- [ ] An ADR with frontmatter outside the subset is listed, takes status and date from a bullet or
+- [x] An ADR with frontmatter outside the subset is listed, takes status and date from a bullet or
       `## Status` section, and logs a warning with line and problem but no content.
-- [ ] A `# 1.5 release` title is not stripped.
-- [ ] Tests via `InMemoryTransport` + `Client`, one temp-dir fixture per format.
+- [x] A `# 1.5 release` title is not stripped.
+- [x] Tests via `InMemoryTransport` + `Client`, one temp-dir fixture per format.

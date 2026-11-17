@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 6 / 10 |
+| Tickets done | 7 / 11 |
 | Total time | 4,75 h |
-| Questions the agent asked before coding | 52 |
-| Agent mistakes caught in review | 31 |
+| Questions the agent asked before coding | 53 |
+| Agent mistakes caught in review | 33 |
 | Test coverage (src) | – |
 
 ## Template
@@ -336,6 +336,40 @@ Be honest: mistakes caught in review are the most valuable part.
     more acceptance criteria.
 - Mistakes caught in review: none (no code).
 - PR: none (docs only)
+
+### Ticket 05b – ADR format variants (2026-11-17)
+
+- Time: TODO
+- Skills used: implement-ticket
+- Questions the agent asked before coding: 1. The plan, test points and branch were confirmed in
+  one round. Decisions 73–77 from the grilling session left no gaps.
+- Question after the review: the MADR 3 template starts its frontmatter with a `#` comment line,
+  so ADRs built from it showed status `Unknown`. The user chose to skip full-line comments for
+  tickets and ADRs (decision 79, changes decision 71).
+- Decisions made (and where recorded):
+  - Decision 78 in `docs/requirements.md`: how far `### Consequences` reaches, `## Consequences`
+    wins over it, the case-sensitive `Date:` line, a leading thematic break read as frontmatter.
+    Taken by the agent under rule 7.
+  - `parseFrontmatter` now returns the body for an invalid block, so an ADR with broken
+    frontmatter keeps its sections.
+- Mistakes caught in review (fresh subagent):
+  - The `Date:` line matched any case, so the `date:` line of an unclosed frontmatter block became
+    the ADR's date while its `status:` was ignored. Now case-sensitive.
+  - The comment line of the stock MADR 3 template made the whole frontmatter invalid (see the
+    question above).
+  - Two test gaps: the date fallback for invalid frontmatter and the missing template warning for
+    the bullet format were not asserted. Both added.
+- Tested: 349 vitest tests, 36 of them new for 05b in `test/adr.test.ts` and
+  `test/frontmatter.test.ts`, over `InMemoryTransport` + `Client` with one temp-dir fixture per
+  format. They cover every acceptance criterion of the ticket (bullet regression on the demo,
+  Nygard, MADR 3, `list_adrs` by status across all three formats, no template warning, the
+  `Superseded by …` cut, the MADR sections, invalid frontmatter with a warning without content,
+  `1.5 release`), plus source order, empty and array values, an unclosed block, the MADR
+  template's comment line and the thematic break.
+- Not tested:
+  - Real-world ADR repositories beyond the fixtures.
+  - A `## Status` section whose first line is a heading or a code fence (noted as a follow-up).
+- PR: #
 
 ## Skill improvements
 
