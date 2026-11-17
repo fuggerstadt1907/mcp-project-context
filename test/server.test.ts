@@ -26,6 +26,7 @@ describe('createServer', () => {
       'get_adr',
       'list_tickets',
       'get_ticket',
+      'get_conventions',
     ]);
     await client.close();
   });
