@@ -2,7 +2,8 @@
 // drafts/, other subdirectories and files like README.md are ignored. Read on every call (ADR 0004).
 import { type SafeFs, SafeFsError, type SafeFsReason } from '../fs/safe-fs.js';
 import { log } from '../log.js';
-import { findHeadings } from './markdown.js';
+import { parseFrontmatter } from './frontmatter.js';
+import { findHeadings, type Heading } from './markdown.js';
 
 export interface Adr {
   id: string;
@@ -48,6 +49,15 @@ interface AdrFile {
 
 const FILE_NAME = /^(\d+)-(.+)\.md$/i;
 const SECTIONS = ['context', 'decision', 'consequences'] as const;
+type Section = (typeof SECTIONS)[number];
+// Section headings (any case), including the MADR 3 names.
+const SECTION_NAMES: Record<string, Section> = Object.assign(Object.create(null), {
+  context: 'context',
+  'context and problem statement': 'context',
+  decision: 'decision',
+  'decision outcome': 'decision',
+  consequences: 'consequences',
+});
 
 /** `"3"`, `"03"` and `"0003"` all become `"0003"`. Anything that is not only digits is undefined. */
 export function normalizeAdrId(input: string): string | undefined {
@@ -136,48 +146,79 @@ function compareIds(a: string, b: string): number {
  * (requirements decision 4) and a warning names what is missing.
  */
 function parseAdr(file: AdrFile, markdown: string): Adr {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const frontmatter = readFrontmatter(file, markdown);
+  const lines = frontmatter.body.replace(/\r\n?/g, '\n').split('\n');
   const headings = findHeadings(lines);
 
   const titleHeading = headings.find((heading) => heading.level === 1);
-  const title = titleHeading
-    ? titleHeading.text.replace(/^\d+\s*:\s*/, '').trim() || file.slug
-    : file.slug;
+  const title = titleHeading ? stripNumber(titleHeading.text) || file.slug : file.slug;
 
-  // Status and Date bullets count only before the first section, so a bullet inside
+  // Bullets and the Date line count only before the first section, so a bullet inside
   // Consequences is not taken for the ADR's status.
   const firstSection = headings.find((heading) => heading.level >= 2)?.line ?? lines.length;
   const header = lines.slice(0, firstSection);
-  const status = bullet(header, 'status');
-  const date = bullet(header, 'date') ?? '';
+  const statusSection = section(lines, headings, 'status');
+  const status = cutBy(
+    frontmatter.status ?? bullet(header, 'status') ?? firstLine(statusSection?.text),
+  );
+  const date = frontmatter.date ?? bullet(header, 'date') ?? dateLine(header) ?? '';
 
-  const sections: Record<(typeof SECTIONS)[number], string | undefined> = {
+  const sections: Record<Section, string | undefined> = {
     context: undefined,
     decision: undefined,
     consequences: undefined,
   };
+  // MADR's `## Decision Outcome`, if that is where the decision came from.
+  let outcome: { index: number; end: number } | undefined;
   for (const [index, heading] of headings.entries()) {
-    const name = heading.text.toLowerCase() as (typeof SECTIONS)[number];
-    if (heading.level !== 2 || !SECTIONS.includes(name) || sections[name] !== undefined) continue;
-    const end = headings.slice(index + 1).find((next) => next.level <= 2)?.line ?? lines.length;
-    sections[name] = lines
-      .slice(heading.line + 1, end)
-      .join('\n')
-      .trim();
+    const name = SECTION_NAMES[heading.text.toLowerCase()];
+    if (heading.level !== 2 || name === undefined || sections[name] !== undefined) continue;
+    const end = sectionEnd(lines, headings, index);
+    sections[name] = text(lines, heading.line + 1, end);
+    if (heading.text.toLowerCase() === 'decision outcome') outcome = { index, end };
+  }
+
+  // MADR keeps consequences as `### Consequences` inside Decision Outcome. A `## Consequences`
+  // section wins, and Decision Outcome then stays whole.
+  if (outcome && sections.consequences === undefined) {
+    const start = (headings[outcome.index] as Heading).line;
+    const subIndex = headings.findIndex(
+      (heading, index) =>
+        index > outcome.index &&
+        heading.line < outcome.end &&
+        heading.level === 3 &&
+        heading.text.toLowerCase() === 'consequences',
+    );
+    const sub = headings[subIndex];
+    if (sub) {
+      const subEnd = sectionEnd(lines, headings, subIndex);
+      sections.consequences = text(lines, sub.line + 1, subEnd);
+      sections.decision = [...lines.slice(start + 1, sub.line), ...lines.slice(subEnd, outcome.end)]
+        .join('\n')
+        .trim();
+    }
   }
 
   const missing = [
     ...(titleHeading ? [] : ['title']),
     ...(status === undefined ? ['status'] : []),
-    ...SECTIONS.filter((name) => sections[name] === undefined),
+    // Consequences are optional in MADR.
+    ...SECTIONS.filter(
+      (name) => sections[name] === undefined && !(name === 'consequences' && outcome),
+    ),
   ];
   if (missing.length > 0) {
     log.warn('ADR does not follow the template', { path: file.path, missing });
   }
 
+  // Without sections the body goes into context, minus the Status section that gave the status.
   const noSections = SECTIONS.every((name) => sections[name] === undefined);
   const body = lines
-    .slice(titleHeading ? titleHeading.line + 1 : 0)
+    .filter(
+      (_, line) =>
+        line > (titleHeading?.line ?? -1) &&
+        !(statusSection && line >= statusSection.start && line < statusSection.end),
+    )
     .join('\n')
     .trim();
 
@@ -192,6 +233,31 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
   };
 }
 
+// MADR 3 frontmatter. Only `status` and `date` are read; an array or empty value counts as missing.
+// Frontmatter outside the subset is ignored with a warning, the ADR is still listed (FR-14).
+function readFrontmatter(
+  file: AdrFile,
+  markdown: string,
+): { body: string; status?: string | undefined; date?: string | undefined } {
+  const result = parseFrontmatter(markdown);
+  if (result.kind === 'none') return { body: markdown };
+  if (result.kind === 'invalid') {
+    // Without a closing line the `---` is probably a thematic break, not frontmatter.
+    if (result.body === undefined) return { body: markdown };
+    log.warn('ADR frontmatter ignored', {
+      path: file.path,
+      line: result.line,
+      problem: result.problem,
+    });
+    return { body: result.body };
+  }
+  const text = (key: string) => {
+    const value = result.data[key];
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+  };
+  return { body: result.body, status: text('status'), date: text('date') };
+}
+
 // `- Status: Accepted`, also with `*` or `+` bullets and `**Status**:` in bold.
 function bullet(lines: string[], key: string): string | undefined {
   const pattern = new RegExp(
@@ -204,4 +270,60 @@ function bullet(lines: string[], key: string): string | undefined {
     if (match) return (match[1] as string).trim() || undefined;
   }
   return undefined;
+}
+
+// `# 0003: Title` and Nygard's `# 1. Title`. `1.5 release` is not a number prefix.
+function stripNumber(title: string): string {
+  return title
+    .replace(/^\d+\s*:\s*/, '')
+    .replace(/^\d+\.\s+/, '')
+    .trim();
+}
+
+// Nygard's plain `Date: 2026-01-01` line, also in bold. Case-sensitive, so the `date:` line of an
+// unclosed frontmatter block is not taken for it.
+function dateLine(lines: string[]): string | undefined {
+  for (const line of lines) {
+    const match = /^\s*(?:\*\*)?Date(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/.exec(line);
+    if (match) return (match[1] as string).trim() || undefined;
+  }
+  return undefined;
+}
+
+// The first level-2 section with this name (any case): its text and line range, heading included.
+function section(
+  lines: string[],
+  headings: Heading[],
+  name: string,
+): { start: number; end: number; text: string } | undefined {
+  const index = headings.findIndex(
+    (heading) => heading.level === 2 && heading.text.toLowerCase() === name,
+  );
+  const heading = headings[index];
+  if (!heading) return undefined;
+  const end = sectionEnd(lines, headings, index);
+  return { start: heading.line, end, text: text(lines, heading.line + 1, end) };
+}
+
+// A section runs to the next heading of the same or a higher level.
+function sectionEnd(lines: string[], headings: Heading[], index: number): number {
+  const level = (headings[index] as Heading).level;
+  return headings.slice(index + 1).find((next) => next.level <= level)?.line ?? lines.length;
+}
+
+function text(lines: string[], start: number, end: number): string {
+  return lines.slice(start, end).join('\n').trim();
+}
+
+// adr-tools writes the status first and may add `Supersedes …` lines below it.
+function firstLine(text: string | undefined): string | undefined {
+  return text
+    ?.split('\n')
+    .find((line) => line.trim() !== '')
+    ?.trim();
+}
+
+// `Superseded by [2. Use X](0002-use-x.md)` becomes `Superseded`, so the status filter finds it.
+function cutBy(status: string | undefined): string | undefined {
+  return status?.replace(/^(.+?)\s+by\s+\S.*$/i, '$1');
 }

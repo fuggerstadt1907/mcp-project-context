@@ -58,6 +58,12 @@ describe('parseFrontmatter', () => {
     });
   });
 
+  it('skips comment lines that start with #', () => {
+    expect(data(fm('# These are optional elements.', 'id: T-1', '#no space'))).toEqual({
+      id: 'T-1',
+    });
+  });
+
   it('treats __proto__ as an ordinary key', () => {
     const parsed = data(fm('__proto__: [a]', 'id: T-1'));
     expect(Object.getPrototypeOf(parsed)).toBeNull();
@@ -93,7 +99,7 @@ describe('parseFrontmatter', () => {
     ['a quoted string spanning lines', fm('title: "open', 'still"')],
     ['text after a quoted value', fm('title: "a" b')],
     ['an unquoted `: `', fm('title: Rate-limit: magic links')],
-    ['a comment line', fm('# comment', 'id: T-1')],
+    ['an indented comment line', fm('  # comment', 'id: T-1')],
     ['a trailing comment', fm('id: T-1 # comment')],
     ['an anchor', fm('id: &a T-1')],
     ['an alias', fm('id: *a')],
@@ -113,6 +119,15 @@ describe('parseFrontmatter', () => {
       kind: 'invalid',
       line: 3,
       problem: 'quoted value without closing quote',
+      body: 'Body.\n',
+    });
+  });
+
+  it('gives no body when the closing --- line is missing', () => {
+    expect(parseFrontmatter('---\nid: T-1\n')).toEqual({
+      kind: 'invalid',
+      line: 1,
+      problem: 'no closing --- line',
     });
   });
 });

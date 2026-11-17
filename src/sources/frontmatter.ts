@@ -1,6 +1,7 @@
 // Frontmatter parser for a fixed subset of YAML (requirements, Data & schema). No YAML dependency.
 // Each line is `key: value`; a value is a plain string, a quoted string or an inline array of
-// plain or quoted items. Anything else (block lists, nesting, multi-line values, comments,
+// plain or quoted items. Blank lines and lines starting with `#` (comments, as in the MADR 3
+// template) are skipped. Anything else (block lists, nesting, multi-line values, trailing comments,
 // anchors, flow maps) makes the whole block invalid, so callers can skip the file.
 
 export type FrontmatterValue = string | string[];
@@ -10,7 +11,8 @@ export type FrontmatterResult =
   // The file does not start with a `---` line.
   | { kind: 'none' }
   // `line` is 1-based in the file. `problem` never contains file content, so it is safe to log.
-  | { kind: 'invalid'; line: number; problem: string };
+  // `body` is the text after the closing `---` line, undefined if there is none.
+  | { kind: 'invalid'; line: number; problem: string; body?: string };
 
 const KEY_LINE = /^([A-Za-z_][\w.-]*):(?:[ \t]+(.*))?$/;
 // Characters that start YAML syntax outside the subset when they open a plain value.
@@ -30,25 +32,26 @@ export function parseFrontmatter(markdown: string): FrontmatterResult {
 
   // No prototype, so a `__proto__` key is an ordinary key.
   const data: Record<string, FrontmatterValue> = Object.create(null);
+  const body = lines.slice(end + 1).join('\n');
   for (let index = 1; index < end; index++) {
     const line = lines[index] as string;
-    if (line.trim() === '') continue;
+    if (line.trim() === '' || line.startsWith('#')) continue;
     const match = KEY_LINE.exec(line);
     if (!match) {
-      return { kind: 'invalid', line: index + 1, problem: 'not a `key: value` line' };
+      return { kind: 'invalid', line: index + 1, problem: 'not a `key: value` line', body };
     }
     const key = match[1] as string;
     if (Object.hasOwn(data, key)) {
-      return { kind: 'invalid', line: index + 1, problem: 'duplicate key' };
+      return { kind: 'invalid', line: index + 1, problem: 'duplicate key', body };
     }
     try {
       data[key] = parseValue((match[2] ?? '').trim());
     } catch (error) {
       if (!(error instanceof Invalid)) throw error;
-      return { kind: 'invalid', line: index + 1, problem: error.message };
+      return { kind: 'invalid', line: index + 1, problem: error.message, body };
     }
   }
-  return { kind: 'ok', data, body: lines.slice(end + 1).join('\n') };
+  return { kind: 'ok', data, body };
 }
 
 function parseValue(value: string): FrontmatterValue {

@@ -364,6 +364,268 @@ describe('ADR parsing', () => {
   });
 });
 
+const nygard = (title: string, status: string) =>
+  `# ${title}\n\nDate: 2026-01-01\n\n## Status\n\n${status}\n\n## Context\n\nWhy.\n\n` +
+  '## Decision\n\nWe do it.\n\n## Consequences\n\nSome.\n';
+
+describe('ADR formats (FR-17)', () => {
+  async function getAdr(markdown: string) {
+    const root = tempRoot({ 'docs/adr/0007-some-slug.md': markdown });
+    const result = await call(root, 'get_adr', { id: '7' });
+    expect(result.isError).toBeFalsy();
+    return result.structuredContent as Record<string, string>;
+  }
+
+  const templateWarnings = () =>
+    logLines().filter((line) => line.msg === 'ADR does not follow the template');
+
+  it('keeps the bullet format of the demo', async () => {
+    const result = await call(DEMO, 'get_adr', { id: '1' });
+    expect(result.structuredContent).toMatchObject({ status: 'Accepted', date: '2026-03-02' });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('reads a Nygard ADR: numbered title, Date line and Status section', async () => {
+    const parsed = await getAdr(nygard('1. Record architecture decisions', 'Accepted'));
+
+    expect(parsed).toEqual({
+      id: '0007',
+      title: 'Record architecture decisions',
+      status: 'Accepted',
+      date: '2026-01-01',
+      context: 'Why.',
+      decision: 'We do it.',
+      consequences: 'Some.',
+    });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('takes the first line of the Status section and ignores the rest', async () => {
+    const parsed = await getAdr(
+      nygard('2. X', 'Accepted\n\nSupersedes [1. Old](0001-old.md)').replace(
+        '## Status\n\n',
+        '## Status\n\n\n',
+      ),
+    );
+    expect(parsed.status).toBe('Accepted');
+  });
+
+  it('treats an empty Status section as Unknown', async () => {
+    const parsed = await getAdr('# 1. X\n\n## Status\n\n## Context\n\nWhy.\n');
+    expect(parsed.status).toBe('Unknown');
+  });
+
+  it.each([
+    ['Superseded by [2. Use X](0002-use-x.md)', 'Superseded'],
+    ['amended BY 0009', 'amended'],
+    ['In progress', 'In progress'],
+    ['Superseded by', 'Superseded by'],
+    ['Nearby', 'Nearby'],
+  ])('reads status %j as %j', async (status, expected) => {
+    const parsed = await getAdr(nygard('1. X', status));
+    expect(parsed.status).toBe(expected);
+  });
+
+  it('cuts `X by …` in a bullet too', async () => {
+    const parsed = await getAdr('# X\n\n- Status: Superseded by ADR 0009\n');
+    expect(parsed.status).toBe('Superseded');
+  });
+
+  it('finds a superseded Nygard ADR by status', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-old.md': nygard('1. Old', 'Superseded by [2. Use X](0002-use-x.md)'),
+      'docs/adr/0002-use-x.md': nygard('2. Use X', 'Accepted'),
+    });
+
+    const result = await call(root, 'list_adrs', { status: 'superseded' });
+
+    expect(result.structuredContent).toEqual({
+      adrs: [{ id: '0001', title: 'Old', status: 'Superseded', date: '2026-01-01' }],
+    });
+  });
+
+  it.each([
+    ['1.5 release', '1.5 release'],
+    ['12. Twelve', 'Twelve'],
+    ['0007: Seven', 'Seven'],
+    ['3 :  Spaced', 'Spaced'],
+  ])('reads title %j as %j', async (heading, title) => {
+    const parsed = await getAdr(`# ${heading}\n\n- Status: Accepted\n`);
+    expect(parsed.title).toBe(title);
+  });
+
+  it('prefers a Status bullet to a Status section and a bullet date to a Date line', async () => {
+    const parsed = await getAdr(
+      '# X\n\n- Status: Proposed\n- Date: 2026-02-02\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n',
+    );
+    expect(parsed).toMatchObject({ status: 'Proposed', date: '2026-02-02' });
+  });
+
+  it('reads a bold Date line and ignores one after the first section', async () => {
+    expect((await getAdr('# X\n\n**Date:** 2026-03-03\n')).date).toBe('2026-03-03');
+    expect((await getAdr('# X\n\n## Context\n\nDate: 2026-03-03\n')).date).toBe('');
+  });
+
+  it('reads status and date from MADR frontmatter and keeps it out of every field', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: accepted\ndate: 2026-01-01\ndeciders: [Jane, Joe]\n---\n# Use Postgres\n\nWe need a DB.\n',
+    );
+
+    expect(parsed).toMatchObject({
+      title: 'Use Postgres',
+      status: 'accepted',
+      date: '2026-01-01',
+      context: 'We need a DB.',
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/deciders|---/);
+  });
+
+  it('reads frontmatter that keeps the comment line of the MADR template', async () => {
+    const parsed = await getAdr(
+      '---\n# These are optional elements. Feel free to remove any of them.\nstatus: accepted\n---\n# X\n',
+    );
+    expect(parsed.status).toBe('accepted');
+    expect(logLines().filter((line) => line.msg === 'ADR frontmatter ignored')).toEqual([]);
+  });
+
+  it('prefers frontmatter to a bullet and a Status section', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: "superseded by ADR-0009"\ndate: 2026-05-05\n---\n# X\n\n- Status: Accepted\n- Date: 2026-01-01\n\n## Status\n\nProposed\n',
+    );
+    expect(parsed).toMatchObject({ status: 'superseded', date: '2026-05-05' });
+  });
+
+  it.each([
+    ['status: []', 'Proposed'],
+    ['status: [a, b]', 'Proposed'],
+    ['status:', 'Proposed'],
+    ['date: 2026-01-01', 'Proposed'],
+  ])('falls back to the bullet for frontmatter %j', async (line, status) => {
+    const parsed = await getAdr(`---\n${line}\n---\n# X\n\n- Status: Proposed\n`);
+    expect(parsed.status).toBe(status);
+  });
+
+  it('lists an ADR with frontmatter outside the subset and warns without content', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-x.md':
+        '---\nstatus: accepted\ndeciders:\n  - secret-name\n---\n# X\n\nDate: 2026-02-02\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n',
+    });
+
+    const listed = await call(root, 'list_adrs');
+    const fetched = await call(root, 'get_adr', { id: '1' });
+
+    expect(listed.structuredContent).toEqual({
+      adrs: [{ id: '0001', title: 'X', status: 'Proposed', date: '2026-02-02' }],
+    });
+    expect(fetched.structuredContent).toMatchObject({ status: 'Proposed', context: 'Why.' });
+    expect(JSON.stringify(fetched.structuredContent)).not.toContain('secret-name');
+    expect(logLines()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        msg: 'ADR frontmatter ignored',
+        path: 'docs/adr/0001-x.md',
+        line: 4,
+        problem: 'not a `key: value` line',
+      }),
+    );
+    expect(stderr()).not.toContain('secret-name');
+  });
+
+  it('reads a file without a closing --- line as plain markdown', async () => {
+    const parsed = await getAdr('---\n# X\n\n- Status: Accepted\n');
+    expect(parsed).toMatchObject({ title: 'X', status: 'Accepted' });
+    expect(logLines().filter((line) => line.msg === 'ADR frontmatter ignored')).toEqual([]);
+  });
+
+  it('takes nothing from the lines of an unclosed frontmatter block', async () => {
+    const parsed = await getAdr('---\nstatus: accepted\ndate: 2026-01-04\n# T\n\nBody.\n');
+    expect(parsed).toMatchObject({ title: 'T', status: 'Unknown', date: '' });
+  });
+
+  it('treats a leading thematic break with a later --- as invalid frontmatter', async () => {
+    const parsed = await getAdr(
+      '---\n\n# Title\n\n- Status: Accepted\n\n---\n\n## Context\n\nA.\n',
+    );
+    expect(parsed).toMatchObject({ title: 'some-slug', status: 'Unknown', context: 'A.' });
+    expect(logLines()).toContainEqual(
+      expect.objectContaining({ msg: 'ADR frontmatter ignored', line: 5 }),
+    );
+  });
+
+  it('finds ADRs of all three formats by status', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-bullet.md': adr('0001: Bullet', 'Accepted'),
+      'docs/adr/0002-nygard.md': nygard('2. Nygard', 'Accepted'),
+      'docs/adr/0003-madr.md': '---\nstatus: accepted\n---\n# MADR\n',
+      'docs/adr/0004-other.md': nygard('4. Other', 'Proposed'),
+    });
+
+    const result = await call(root, 'list_adrs', { status: 'accepted' });
+
+    const ids = (result.structuredContent as { adrs: { id: string }[] }).adrs.map((a) => a.id);
+    expect(ids).toEqual(['0001', '0002', '0003']);
+  });
+
+  it('maps the MADR sections and splits off ### Consequences', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: accepted\ndate: 2026-01-01\n---\n# Use Postgres\n\n' +
+        '## Context and Problem Statement\n\nWe need a DB.\n\n' +
+        '## Considered Options\n\n* Postgres\n* MySQL\n\n' +
+        '## Decision Outcome\n\nChosen option: "Postgres".\n\n' +
+        '### Consequences\n\n* Good, because known.\n\n' +
+        '### Confirmation\n\nReview.\n\n' +
+        '## Pros and Cons of the Options\n\nMany.\n',
+    );
+
+    expect(parsed).toEqual({
+      id: '0007',
+      title: 'Use Postgres',
+      status: 'accepted',
+      date: '2026-01-01',
+      context: 'We need a DB.',
+      decision: 'Chosen option: "Postgres".\n\n### Confirmation\n\nReview.',
+      consequences: '* Good, because known.',
+    });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('does not warn about missing consequences when Decision Outcome is there', async () => {
+    const parsed = await getAdr(
+      '---\nstatus: proposed\n---\n# X\n\n## Context and Problem Statement\n\nA.\n\n## Decision Outcome\n\nB.\n',
+    );
+    expect(parsed).toMatchObject({ context: 'A.', decision: 'B.', consequences: '' });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('keeps Decision Outcome whole when there is a ## Consequences section', async () => {
+    const parsed = await getAdr(
+      '# X\n\n- Status: Accepted\n\n## Context\n\nA.\n\n## Decision Outcome\n\nB.\n\n### Consequences\n\nC.\n\n## Consequences\n\nD.\n',
+    );
+    expect(parsed).toMatchObject({
+      decision: 'B.\n\n### Consequences\n\nC.',
+      consequences: 'D.',
+    });
+  });
+
+  it('still warns about a missing consequences section next to ## Decision', async () => {
+    await getAdr('# X\n\n- Status: Accepted\n\n## Context\n\nA.\n\n## Decision\n\nB.\n');
+    expect(templateWarnings()).toContainEqual(
+      expect.objectContaining({ missing: ['consequences'] }),
+    );
+  });
+
+  it('keeps the Status section out of the context fallback', async () => {
+    const parsed = await getAdr(
+      '# 1. X\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n\n## Notes\n\nFree text.\n',
+    );
+    expect(parsed).toMatchObject({ status: 'Accepted', decision: '', consequences: '' });
+    expect(parsed.context).toBe('Date: 2026-01-01\n\n## Notes\n\nFree text.');
+    expect(templateWarnings()).toContainEqual(
+      expect.objectContaining({ missing: ['context', 'decision', 'consequences'] }),
+    );
+  });
+});
+
 describe('adr:// resource', () => {
   function withClient<T>(root: string, run: (client: Client) => Promise<T>, maxFileKb = 256) {
     return withClientFor(root, run, { maxFileKb });
