@@ -1,9 +1,9 @@
 // Masks secrets and personal data in text that leaves the server (ADR 0003).
 // Deliberately imports no logger: matched values must never be written anywhere.
 
-// `index` is where the masked part starts. `match` is the whole pattern match, which can be wider:
+// `index` and `end` bound the masked part. `match` is the whole pattern match, which can be wider:
 // the key of an assignment, `Bearer`, `scheme://`. A snippet must not cut into it (decision 80).
-export type Finding = { type: string; index: number; match: Span };
+export type Finding = { type: string; index: number; end: number; match: Span };
 
 export type Span = [start: number, end: number];
 
@@ -86,7 +86,10 @@ const PATTERNS: Pattern[] = [
   },
   {
     type: 'email',
-    regex: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}\b/g,
+    // Not the password in `scheme://user:password@host`: that is url_credentials, and the host
+    // after it is not part of an email (decision 86).
+    regex:
+      /(?<![A-Za-z0-9._%+-])(?<!\/\/[^\s:/@]{1,256}:)[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}\b/g,
   },
   {
     type: 'iban',
@@ -108,22 +111,52 @@ const PATTERNS: Pattern[] = [
   },
 ];
 
-type Range = { start: number; end: number; type: string; match: Span };
+// `rank` is the pattern's position in PATTERNS; the lowest rank names a merged range.
+type Range = { start: number; end: number; type: string; match: Span; rank: number };
+
+/**
+ * Every span each pattern masks on its own, in pattern order, before overlaps are resolved.
+ * `span` is the part to mask, `match` the whole pattern match. Exported for the overlap tests.
+ */
+export function patternMatches(text: string): { type: string; span: Span; match: Span }[] {
+  const found: { type: string; span: Span; match: Span }[] = [];
+  for (const { type, regex, span } of PATTERNS) {
+    for (const match of text.matchAll(regex)) {
+      const whole: Span = [match.index, match.index + match[0].length];
+      const masked = span ? span(match) : whole;
+      if (masked) found.push({ type, span: masked, match: whole });
+    }
+  }
+  return found;
+}
 
 /** Replaces every match with `[REDACTED:<type>]`. `index` is the offset in the original text. */
 export function redact(text: string): { text: string; findings: Finding[] } {
   const ranges: Range[] = [];
 
-  for (const { type, regex, span } of PATTERNS) {
-    for (const match of text.matchAll(regex)) {
-      const found: Span | undefined = span
-        ? span(match)
-        : [match.index, match.index + match[0].length];
-      if (!found) continue;
-      const [start, end] = found;
-      if (ranges.some((r) => start < r.end && r.start < end)) continue;
-      ranges.push({ start, end, type, match: [match.index, match.index + match[0].length] });
+  for (const { type, span, match } of patternMatches(text)) {
+    const rank = PATTERNS.findIndex((pattern) => pattern.type === type);
+    const range: Range = { start: span[0], end: span[1], type, match, rank };
+    // A match that overlaps earlier ones is merged with them and the earliest type is kept.
+    // Dropping it would leave its part outside the earlier span visible (`password = "hunter2
+    // AKIA…"`), so everything any single pattern masks stays masked (decisions 81 and 86).
+    for (let i = ranges.length - 1; i >= 0; i--) {
+      const other = ranges[i] as Range;
+      if (range.start < other.end && other.start < range.end) {
+        if (other.rank < range.rank) {
+          range.rank = other.rank;
+          range.type = other.type;
+        }
+        range.start = Math.min(range.start, other.start);
+        range.end = Math.max(range.end, other.end);
+        range.match = [
+          Math.min(range.match[0], other.match[0]),
+          Math.max(range.match[1], other.match[1]),
+        ];
+        ranges.splice(i, 1);
+      }
     }
+    ranges.push(range);
   }
 
   ranges.sort((a, b) => a.start - b.start);
@@ -138,6 +171,6 @@ export function redact(text: string): { text: string; findings: Finding[] } {
 
   return {
     text: out,
-    findings: ranges.map(({ type, start, match }) => ({ type, index: start, match })),
+    findings: ranges.map(({ type, start, end, match }) => ({ type, index: start, end, match })),
   };
 }
