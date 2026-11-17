@@ -1,8 +1,10 @@
-import { mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CallToolResult } from '@modelcontextprotocol/server';
+import { Client } from '@modelcontextprotocol/client';
+import { type CallToolResult, InMemoryTransport, McpServer } from '@modelcontextprotocol/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { slugify } from '../src/tools/create-adr-draft.js';
+import { createSafeFs, type SafeFs } from '../src/fs/safe-fs.js';
+import { registerCreateAdrDraft, slugify } from '../src/tools/create-adr-draft.js';
 import { call, captureIo, connect, DEMO, tempRoot, text, withClient } from './support.js';
 
 const { logLines } = captureIo();
@@ -215,14 +217,35 @@ describe('create_adr_draft', () => {
     expect(drafts(root)).toHaveLength(11);
   });
 
-  it('returns a tool error and leaves an existing entry unchanged (AC12)', async () => {
+  it('returns a tool error and leaves an entry unchanged that appears after numbering (AC12)', async () => {
     const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
-    // Not counted for numbering, because it is not a readable file, but it blocks the name.
+    // Another process creates the target between numbering and write: listNames does not see it yet.
     mkdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'), { recursive: true });
     symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/adr/drafts/0002-other.md'));
+    const real = createSafeFs({ root, maxFileKb: 256 });
+    const racing: SafeFs = {
+      ...real,
+      listNames: async (dir) => (dir.endsWith('drafts') ? [] : real.listNames(dir)),
+    };
+    const server = new McpServer(
+      { name: 'test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    );
+    registerCreateAdrDraft(server, racing, 'docs/adr');
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await client.connect(clientTransport);
 
-    const dir = await call(root, 'create_adr_draft', draft(), WRITE);
-    const link = await call(root, 'create_adr_draft', draft({ title: 'Other' }), WRITE);
+    const dir = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft(),
+    })) as CallToolResult;
+    const link = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft({ title: 'Other' }),
+    })) as CallToolResult;
+    await client.close();
 
     for (const result of [dir, link]) {
       expect(result.isError).toBe(true);
@@ -232,6 +255,84 @@ describe('create_adr_draft', () => {
     expect(drafts(root)).toEqual(['0002-other.md', '0002-use-postgres.md']);
     expect(readdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'))).toEqual([]);
     expect(readdirSync(root)).not.toContain('nowhere.md');
+  });
+
+  it('counts names it cannot read: a directory, a broken symlink, an unreadable file', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR, 'docs/adr/0007-locked.md': ADR });
+    mkdirSync(join(root, 'docs/adr/drafts/0008-dir.md'), { recursive: true });
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/adr/drafts/0009-broken.md'));
+    chmodSync(join(root, 'docs/adr/0007-locked.md'), 0o000);
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    chmodSync(join(root, 'docs/adr/0007-locked.md'), 0o644);
+    expect(structured(result).id).toBe('0010');
+  });
+
+  it('counts drafts behind a symlinked drafts/ directory inside root', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR, 'other/0009-z.md': ADR });
+    symlinkSync(join(root, 'other'), join(root, 'docs/adr/drafts'));
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    expect(structured(result).path).toBe('docs/adr/drafts/0010-use-postgres.md');
+    expect(readdirSync(join(root, 'other')).sort()).toEqual(['0009-z.md', '0010-use-postgres.md']);
+  });
+
+  it('ignores numbers too large to be exact', async () => {
+    const root = tempRoot({
+      'docs/adr/0003-a.md': ADR,
+      'docs/adr/99999999999999999999-huge.md': ADR,
+    });
+    expect(structured(await call(root, 'create_adr_draft', draft(), WRITE)).id).toBe('0004');
+  });
+
+  it('keeps serving after a failed call in a parallel batch', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const titles = ['A', '', 'B', 'x\ny', 'C'];
+    const results = await withClient(
+      root,
+      (client) =>
+        Promise.all(
+          titles.map(
+            (title) =>
+              client.callTool({
+                name: 'create_adr_draft',
+                arguments: draft({ title }),
+              }) as Promise<CallToolResult>,
+          ),
+        ),
+      WRITE,
+    );
+    expect(results.map((result) => Boolean(result.isError))).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(drafts(root)).toEqual(['0002-a.md', '0003-b.md', '0004-c.md']);
+  });
+
+  it('names the project root when --adr-dir is .', async () => {
+    const root = tempRoot({ '0001-a.md': ADR });
+    const result = await call(root, 'create_adr_draft', draft(), { ...WRITE, adrDir: '.' });
+    expect(structured(result).path).toBe('drafts/0002-use-postgres.md');
+    expect(text(result)).toContain('move it to the project root to accept it.');
+  });
+
+  it('masks a secret in the title before it becomes the file name', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const key = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
+
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({ title: `Rotate ${key} now` }),
+      WRITE,
+    );
+
+    expect(structured(result).path).toBe('docs/adr/drafts/0002-rotate-redacted-aws-key-now.md');
+    expect(drafts(root)).toEqual(['0002-rotate-redacted-aws-key-now.md']);
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(key, 'i'));
+    const content = readFileSync(join(root, structured(result).path), 'utf8');
+    expect(content).toContain(`# 0002: Rotate ${key} now`);
   });
 
   it('keeps a title like ../../evil inside drafts/', async () => {

@@ -38,6 +38,9 @@ export interface SafeFs {
   // Files over the size limit are listed, so callers can report them as skipped. Denied and
   // unreadable entries are left out.
   listFiles(relDir: string, options?: { extensions?: readonly string[] }): Promise<string[]>;
+  // Sorted names of the entries directly in a directory, of any type and readable or not. Denied
+  // names are left out. For counting numbered files; no content is read.
+  listNames(relDir: string): Promise<string[]>;
   // Exclusive create: anything already at the path, even a broken symlink, is `exists`. Creates
   // missing parent directories. There is no overwrite mode (ADR 0002).
   writeTextFile(relPath: string, content: string, options: { overwrite: false }): Promise<void>;
@@ -148,10 +151,8 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
   }
 
-  async function listFiles(
-    relDir: string,
-    options: { extensions?: readonly string[] } = {},
-  ): Promise<string[]> {
+  // Rules 1 and 2 for a directory, plus the deny list. Returns its real path.
+  async function inspectDir(relDir: string): Promise<string> {
     const { real, exists } = resolveInsideRoot(relDir);
     for (const path of [relative(root, resolve(root, relDir)), relative(root, real)]) {
       if (isDenied(path)) {
@@ -162,6 +163,22 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     if (!info?.isDirectory()) {
       throw new SafeFsError('not_found', relDir, `Directory not found: ${relDir}`);
     }
+    return real;
+  }
+
+  async function listNames(relDir: string): Promise<string[]> {
+    const real = await inspectDir(relDir);
+    const names = await readdir(real).catch(() => {
+      throw unreadable(relDir);
+    });
+    return names.filter((name) => !isDeniedSegment(name)).sort();
+  }
+
+  async function listFiles(
+    relDir: string,
+    options: { extensions?: readonly string[] } = {},
+  ): Promise<string[]> {
+    const real = await inspectDir(relDir);
     const entries = await readdir(real, { withFileTypes: true }).catch(() => {
       throw unreadable(relDir);
     });
@@ -237,7 +254,7 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
   }
 
-  return { readTextFile, exists, listFiles, writeTextFile };
+  return { readTextFile, exists, listFiles, listNames, writeTextFile };
 }
 
 function isSymlink(abs: string): boolean {

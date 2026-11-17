@@ -4,6 +4,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { type SafeFs, SafeFsError } from '../fs/safe-fs.js';
+import { redact } from '../redact.js';
 import { fail, ok, withAudit } from './result.js';
 
 const MAX_TITLE = 200;
@@ -30,8 +31,10 @@ interface DraftInput {
 
 /** Lowercase ASCII words joined by `-`, at most 60 characters. Never contains `/`, `\` or `..`. */
 export function slugify(title: string): string {
-  const slug = title
-    .normalize('NFKD')
+  // Masked first: lowercasing would hide a secret from the patterns, and the file name ends up in
+  // the returned path and on disk (decision 90). The heading inside the file keeps the raw title.
+  const slug = redact(title)
+    .text.normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .replace(/ß/g, 'ss')
     .toLowerCase()
@@ -116,31 +119,35 @@ export function registerCreateAdrDraft(server: McpServer, safeFs: SafeFs, adrDir
       throw error;
     }
 
+    const target = adrDir === '.' ? 'the project root' : `${adrDir}/`;
     const text =
       `Created ADR draft ${id} "${title}" at ${path} (${STATUS}, ${date}). Drafts are not ` +
-      `listed by list_adrs; move it to ${adrDir}/ to accept it.`;
+      `listed by list_adrs; move it to ${target} to accept it.`;
     return ok({ id, title, status: STATUS, date, path }, text);
   }
 
-  // Highest number among `NNNN-*.md` directly in adrDir and in drafts/, plus one (decision 6).
-  // Files over the size limit count too; undefined if adrDir does not exist.
+  // Highest number among `NNNN-*.md` names directly in adrDir and in drafts/, plus one
+  // (decision 6). Counts names, so unreadable and oversized files count too. Undefined if adrDir
+  // does not exist.
   async function nextNumber(): Promise<number | undefined> {
-    let paths: string[];
+    const names = await namesIn(adrDir);
+    if (names === undefined) return undefined;
+    let highest = 0;
+    for (const name of [...names, ...((await namesIn(draftsDir)) ?? [])]) {
+      const number = Number(NUMBERED.exec(name)?.[1]);
+      // Numbers beyond 2^53 lose precision; such a file cannot be meant as an ADR number.
+      if (Number.isSafeInteger(number)) highest = Math.max(highest, number);
+    }
+    return highest + 1;
+  }
+
+  async function namesIn(dir: string): Promise<string[] | undefined> {
     try {
-      paths = await safeFs.listFiles(adrDir, { extensions: ['.md'] });
+      return await safeFs.listNames(dir);
     } catch (error) {
       if (error instanceof SafeFsError && error.reason === 'not_found') return undefined;
       throw error;
     }
-    const prefix = adrDir === '.' ? '' : `${adrDir}/`;
-    let highest = 0;
-    for (const path of paths) {
-      const name = path.slice(prefix.length).replace(/^drafts\//, '');
-      if (name.includes('/')) continue;
-      const match = NUMBERED.exec(name);
-      if (match) highest = Math.max(highest, Number(match[1]));
-    }
-    return highest + 1;
   }
 }
 

@@ -400,3 +400,26 @@ describe('writeTextFile', () => {
     expect((error as SafeFsError).message).not.toContain(base);
   });
 });
+
+describe('listNames', () => {
+  it('returns every entry name directly in a directory, sorted, without denied names', async () => {
+    write('docs/b.md');
+    write('docs/a.ts');
+    write('docs/sub/c.md');
+    write('docs/.env', 'SECRET=1');
+    mkdirSync(join(root, 'docs/.git'));
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/broken.md'));
+    await expect(safeFs.listNames('docs')).resolves.toEqual(['a.ts', 'b.md', 'broken.md', 'sub']);
+  });
+
+  it('applies the directory rules of listFiles', async () => {
+    write('.git/x.md');
+    write('a.md');
+    symlinkSync(base, join(root, 'up'));
+    await expectReason(safeFs.listNames('..'), 'outside_root');
+    await expectReason(safeFs.listNames('up'), 'outside_root');
+    await expectReason(safeFs.listNames('.git'), 'denied');
+    await expectReason(safeFs.listNames('missing'), 'not_found');
+    await expectReason(safeFs.listNames('a.md'), 'not_found');
+  });
+});
