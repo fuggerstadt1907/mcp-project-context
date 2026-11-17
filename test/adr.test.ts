@@ -364,6 +364,119 @@ describe('ADR parsing', () => {
   });
 });
 
+const nygard = (title: string, status: string) =>
+  `# ${title}\n\nDate: 2026-01-01\n\n## Status\n\n${status}\n\n## Context\n\nWhy.\n\n` +
+  '## Decision\n\nWe do it.\n\n## Consequences\n\nSome.\n';
+
+describe('ADR formats (FR-17)', () => {
+  async function getAdr(markdown: string) {
+    const root = tempRoot({ 'docs/adr/0007-some-slug.md': markdown });
+    const result = await call(root, 'get_adr', { id: '7' });
+    expect(result.isError).toBeFalsy();
+    return result.structuredContent as Record<string, string>;
+  }
+
+  const templateWarnings = () =>
+    logLines().filter((line) => line.msg === 'ADR does not follow the template');
+
+  it('keeps the bullet format of the demo', async () => {
+    const result = await call(DEMO, 'get_adr', { id: '1' });
+    expect(result.structuredContent).toMatchObject({ status: 'Accepted', date: '2026-03-02' });
+  });
+
+  it('reads a Nygard ADR: numbered title, Date line and Status section', async () => {
+    const parsed = await getAdr(nygard('1. Record architecture decisions', 'Accepted'));
+
+    expect(parsed).toEqual({
+      id: '0007',
+      title: 'Record architecture decisions',
+      status: 'Accepted',
+      date: '2026-01-01',
+      context: 'Why.',
+      decision: 'We do it.',
+      consequences: 'Some.',
+    });
+    expect(templateWarnings()).toEqual([]);
+  });
+
+  it('takes the first line of the Status section and ignores the rest', async () => {
+    const parsed = await getAdr(
+      nygard('2. X', 'Accepted\n\nSupersedes [1. Old](0001-old.md)').replace(
+        '## Status\n\n',
+        '## Status\n\n\n',
+      ),
+    );
+    expect(parsed.status).toBe('Accepted');
+  });
+
+  it('treats an empty Status section as Unknown', async () => {
+    const parsed = await getAdr('# 1. X\n\n## Status\n\n## Context\n\nWhy.\n');
+    expect(parsed.status).toBe('Unknown');
+  });
+
+  it.each([
+    ['Superseded by [2. Use X](0002-use-x.md)', 'Superseded'],
+    ['amended BY 0009', 'amended'],
+    ['In progress', 'In progress'],
+    ['Superseded by', 'Superseded by'],
+    ['Nearby', 'Nearby'],
+  ])('reads status %j as %j', async (status, expected) => {
+    const parsed = await getAdr(nygard('1. X', status));
+    expect(parsed.status).toBe(expected);
+  });
+
+  it('cuts `X by …` in a bullet too', async () => {
+    const parsed = await getAdr('# X\n\n- Status: Superseded by ADR 0009\n');
+    expect(parsed.status).toBe('Superseded');
+  });
+
+  it('finds a superseded Nygard ADR by status', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-old.md': nygard('1. Old', 'Superseded by [2. Use X](0002-use-x.md)'),
+      'docs/adr/0002-use-x.md': nygard('2. Use X', 'Accepted'),
+    });
+
+    const result = await call(root, 'list_adrs', { status: 'superseded' });
+
+    expect(result.structuredContent).toEqual({
+      adrs: [{ id: '0001', title: 'Old', status: 'Superseded', date: '2026-01-01' }],
+    });
+  });
+
+  it.each([
+    ['1.5 release', '1.5 release'],
+    ['12. Twelve', 'Twelve'],
+    ['0007: Seven', 'Seven'],
+    ['3 :  Spaced', 'Spaced'],
+  ])('reads title %j as %j', async (heading, title) => {
+    const parsed = await getAdr(`# ${heading}\n\n- Status: Accepted\n`);
+    expect(parsed.title).toBe(title);
+  });
+
+  it('prefers a Status bullet to a Status section and a bullet date to a Date line', async () => {
+    const parsed = await getAdr(
+      '# X\n\n- Status: Proposed\n- Date: 2026-02-02\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n',
+    );
+    expect(parsed).toMatchObject({ status: 'Proposed', date: '2026-02-02' });
+  });
+
+  it('reads a bold Date line and ignores one after the first section', async () => {
+    expect((await getAdr('# X\n\n**Date:** 2026-03-03\n')).date).toBe('2026-03-03');
+    expect((await getAdr('# X\n\n## Context\n\nDate: 2026-03-03\n')).date).toBe('');
+  });
+
+  it('keeps the Status section out of the context fallback', async () => {
+    const parsed = await getAdr(
+      '# 1. X\n\nDate: 2026-01-01\n\n## Status\n\nAccepted\n\n## Notes\n\nFree text.\n',
+    );
+    expect(parsed).toMatchObject({ status: 'Accepted', decision: '', consequences: '' });
+    expect(parsed.context).toBe('Date: 2026-01-01\n\n## Notes\n\nFree text.');
+    expect(templateWarnings()).toContainEqual(
+      expect.objectContaining({ missing: ['context', 'decision', 'consequences'] }),
+    );
+  });
+});
+
 describe('adr:// resource', () => {
   function withClient<T>(root: string, run: (client: Client) => Promise<T>, maxFileKb = 256) {
     return withClientFor(root, run, { maxFileKb });

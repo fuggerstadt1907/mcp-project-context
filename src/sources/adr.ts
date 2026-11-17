@@ -2,7 +2,7 @@
 // drafts/, other subdirectories and files like README.md are ignored. Read on every call (ADR 0004).
 import { type SafeFs, SafeFsError, type SafeFsReason } from '../fs/safe-fs.js';
 import { log } from '../log.js';
-import { findHeadings } from './markdown.js';
+import { findHeadings, type Heading } from './markdown.js';
 
 export interface Adr {
   id: string;
@@ -140,16 +140,15 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
   const headings = findHeadings(lines);
 
   const titleHeading = headings.find((heading) => heading.level === 1);
-  const title = titleHeading
-    ? titleHeading.text.replace(/^\d+\s*:\s*/, '').trim() || file.slug
-    : file.slug;
+  const title = titleHeading ? stripNumber(titleHeading.text) || file.slug : file.slug;
 
-  // Status and Date bullets count only before the first section, so a bullet inside
+  // Bullets and the Date line count only before the first section, so a bullet inside
   // Consequences is not taken for the ADR's status.
   const firstSection = headings.find((heading) => heading.level >= 2)?.line ?? lines.length;
   const header = lines.slice(0, firstSection);
-  const status = bullet(header, 'status');
-  const date = bullet(header, 'date') ?? '';
+  const statusSection = section(lines, headings, 'status');
+  const status = cutBy(bullet(header, 'status') ?? firstLine(statusSection?.text));
+  const date = bullet(header, 'date') ?? dateLine(header) ?? '';
 
   const sections: Record<(typeof SECTIONS)[number], string | undefined> = {
     context: undefined,
@@ -175,9 +174,14 @@ function parseAdr(file: AdrFile, markdown: string): Adr {
     log.warn('ADR does not follow the template', { path: file.path, missing });
   }
 
+  // Without sections the body goes into context, minus the Status section that gave the status.
   const noSections = SECTIONS.every((name) => sections[name] === undefined);
   const body = lines
-    .slice(titleHeading ? titleHeading.line + 1 : 0)
+    .filter(
+      (_, line) =>
+        line > (titleHeading?.line ?? -1) &&
+        !(statusSection && line >= statusSection.start && line < statusSection.end),
+    )
     .join('\n')
     .trim();
 
@@ -204,4 +208,49 @@ function bullet(lines: string[], key: string): string | undefined {
     if (match) return (match[1] as string).trim() || undefined;
   }
   return undefined;
+}
+
+// `# 0003: Title` and Nygard's `# 1. Title`. `1.5 release` is not a number prefix.
+function stripNumber(title: string): string {
+  return title
+    .replace(/^\d+\s*:\s*/, '')
+    .replace(/^\d+\.\s+/, '')
+    .trim();
+}
+
+// Nygard's plain `Date: 2026-01-01` line, also in bold.
+function dateLine(lines: string[]): string | undefined {
+  for (const line of lines) {
+    const match = /^\s*(?:\*\*)?date(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/i.exec(line);
+    if (match) return (match[1] as string).trim() || undefined;
+  }
+  return undefined;
+}
+
+// The first level-2 section with this name (any case): its text and line range, heading included.
+function section(
+  lines: string[],
+  headings: Heading[],
+  name: string,
+): { start: number; end: number; text: string } | undefined {
+  const index = headings.findIndex(
+    (heading) => heading.level === 2 && heading.text.toLowerCase() === name,
+  );
+  const heading = headings[index];
+  if (!heading) return undefined;
+  const end = headings.slice(index + 1).find((next) => next.level <= 2)?.line ?? lines.length;
+  return { start: heading.line, end, text: lines.slice(heading.line + 1, end).join('\n') };
+}
+
+// adr-tools writes the status first and may add `Supersedes …` lines below it.
+function firstLine(text: string | undefined): string | undefined {
+  return text
+    ?.split('\n')
+    .find((line) => line.trim() !== '')
+    ?.trim();
+}
+
+// `Superseded by [2. Use X](0002-use-x.md)` becomes `Superseded`, so the status filter finds it.
+function cutBy(status: string | undefined): string | undefined {
+  return status?.replace(/^(.+?)\s+by\s+\S.*$/i, '$1');
 }
