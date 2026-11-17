@@ -1,7 +1,7 @@
-// The only way to read files. Every path is checked against root, the deny list, the extension
-// allow-list and the size limit before anything is read.
+// The only way to read and write files. Every path is checked against root, the deny list, the
+// extension allow-list and the size limit before anything is read or written.
 import { type Dirent, lstatSync, realpathSync } from 'node:fs';
-import { access, constants, open, readdir, stat } from 'node:fs/promises';
+import { access, constants, mkdir, open, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Config } from '../config.js';
 
@@ -14,7 +14,9 @@ export type SafeFsReason =
   | 'extension'
   | 'too_large'
   | 'not_found'
-  | 'unreadable';
+  | 'unreadable'
+  | 'exists'
+  | 'unwritable';
 
 export class SafeFsError extends Error {
   override readonly name = 'SafeFsError';
@@ -36,6 +38,9 @@ export interface SafeFs {
   // Files over the size limit are listed, so callers can report them as skipped. Denied and
   // unreadable entries are left out.
   listFiles(relDir: string, options?: { extensions?: readonly string[] }): Promise<string[]>;
+  // Exclusive create: anything already at the path, even a broken symlink, is `exists`. Creates
+  // missing parent directories. There is no overwrite mode (ADR 0002).
+  writeTextFile(relPath: string, content: string, options: { overwrite: false }): Promise<void>;
 }
 
 // config.root must be a real path, as loadConfig returns it.
@@ -193,7 +198,62 @@ export function createSafeFs(config: Pick<Config, 'root' | 'maxFileKb'>): SafeFs
     }
   }
 
-  return { readTextFile, exists, listFiles };
+  async function writeTextFile(
+    relPath: string,
+    content: string,
+    _options: { overwrite: false },
+  ): Promise<void> {
+    let target: { real: string; exists: boolean };
+    try {
+      target = resolveInsideRoot(relPath);
+    } catch (error) {
+      if (!(error instanceof SafeFsError)) throw error;
+      if (error.reason === 'unreadable') throw unwritable(relPath);
+      // A broken symlink at the target: its target cannot be checked, and it is not ours to replace.
+      if (error.reason === 'not_found' && isSymlink(resolve(root, relPath))) {
+        checkFileRules(relPath, resolve(root, relPath));
+        throw alreadyExists(relPath);
+      }
+      throw error;
+    }
+    if (target.real === root) throw alreadyExists(relPath);
+    checkFileRules(relPath, target.real);
+    if (target.exists) throw alreadyExists(relPath);
+    if (Buffer.byteLength(content, 'utf8') > maxBytes) {
+      throw new SafeFsError(
+        'too_large',
+        relPath,
+        `Content is larger than ${config.maxFileKb} KB: ${relPath}`,
+      );
+    }
+    // 'wx' fails if anything appeared at the path since the check, including a symlink, so the
+    // write never follows a link. A symlinked parent swapped in after the check is not caught.
+    try {
+      await mkdir(dirname(target.real), { recursive: true });
+      await writeFile(target.real, content, { encoding: 'utf8', flag: 'wx' });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      throw code === 'EEXIST' ? alreadyExists(relPath) : unwritable(relPath);
+    }
+  }
+
+  return { readTextFile, exists, listFiles, writeTextFile };
+}
+
+function isSymlink(abs: string): boolean {
+  try {
+    return lstatSync(abs).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+function alreadyExists(relPath: string): SafeFsError {
+  return new SafeFsError('exists', relPath, `File already exists: ${relPath}`);
+}
+
+function unwritable(relPath: string): SafeFsError {
+  return new SafeFsError('unwritable', relPath, `File cannot be written: ${relPath}`);
 }
 
 function outsideRoot(relPath: string): SafeFsError {

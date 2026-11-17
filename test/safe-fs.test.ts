@@ -1,7 +1,9 @@
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -328,5 +330,73 @@ describe('listFiles', () => {
     write('a.md');
     await expectReason(safeFs.listFiles('tickets'), 'not_found');
     await expectReason(safeFs.listFiles('a.md'), 'not_found');
+  });
+});
+
+describe('writeTextFile', () => {
+  const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+  it('creates a new file and its missing parent directories', async () => {
+    await safeFs.writeTextFile('docs/adr/drafts/0001-x.md', '# Draft', { overwrite: false });
+    expect(read('docs/adr/drafts/0001-x.md')).toBe('# Draft');
+  });
+
+  it('never overwrites an existing file', async () => {
+    write('docs/a.md', 'original');
+    await expectReason(safeFs.writeTextFile('docs/a.md', 'new', { overwrite: false }), 'exists');
+    expect(read('docs/a.md')).toBe('original');
+  });
+
+  it('reports a directory or a broken symlink at the target as exists, and writes nothing', async () => {
+    mkdirSync(join(root, 'dir.md'));
+    symlinkSync(join(base, 'planted.md'), join(root, 'outward.md'));
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'broken.md'));
+    await expectReason(safeFs.writeTextFile('dir.md', 'x', { overwrite: false }), 'exists');
+    await expectReason(safeFs.writeTextFile('outward.md', 'x', { overwrite: false }), 'exists');
+    await expectReason(safeFs.writeTextFile('broken.md', 'x', { overwrite: false }), 'exists');
+    expect(existsSync(join(base, 'planted.md'))).toBe(false);
+    expect(existsSync(join(root, 'nowhere.md'))).toBe(false);
+  });
+
+  it('rejects paths outside root, also through a symlinked directory', async () => {
+    symlinkSync(base, join(root, 'up'));
+    const options = { overwrite: false } as const;
+    await expectReason(safeFs.writeTextFile('../evil.md', 'x', options), 'outside_root');
+    await expectReason(safeFs.writeTextFile(join(base, 'evil.md'), 'x', options), 'outside_root');
+    await expectReason(safeFs.writeTextFile('up/evil.md', 'x', options), 'outside_root');
+    await expectReason(safeFs.writeTextFile('up/new/evil.md', 'x', options), 'outside_root');
+    expect(existsSync(join(base, 'evil.md'))).toBe(false);
+    expect(existsSync(join(base, 'new'))).toBe(false);
+  });
+
+  it('applies the deny list and the extension allow-list', async () => {
+    const options = { overwrite: false } as const;
+    await expectReason(safeFs.writeTextFile('.env', 'x', options), 'denied');
+    await expectReason(safeFs.writeTextFile('.env.md', 'x', options), 'denied');
+    await expectReason(safeFs.writeTextFile('.git/x.md', 'x', options), 'denied');
+    await expectReason(safeFs.writeTextFile('node_modules/x/readme.md', 'x', options), 'denied');
+    await expectReason(safeFs.writeTextFile('src/x.ts', 'x', options), 'extension');
+    await expectReason(safeFs.writeTextFile('a.md\0.txt', 'x', options), 'denied');
+    expect(existsSync(join(root, '.git'))).toBe(false);
+    expect(existsSync(join(root, 'node_modules'))).toBe(false);
+    expect(existsSync(join(root, 'src'))).toBe(false);
+  });
+
+  it('rejects content over maxFileKb, so it never writes what it would not read', async () => {
+    const options = { overwrite: false } as const;
+    await expectReason(safeFs.writeTextFile('big.md', 'x'.repeat(1025), options), 'too_large');
+    expect(existsSync(join(root, 'big.md'))).toBe(false);
+    await safeFs.writeTextFile('limit.md', 'x'.repeat(1024), options);
+    expect(read('limit.md')).toHaveLength(1024);
+  });
+
+  it.skipIf(asRoot)('reports a directory it cannot write to as unwritable', async () => {
+    mkdirSync(join(root, 'locked'));
+    lock('locked');
+    const error = await safeFs
+      .writeTextFile('locked/a.md', 'x', { overwrite: false })
+      .catch((e: unknown) => e);
+    expect((error as SafeFsError).reason).toBe('unwritable');
+    expect((error as SafeFsError).message).not.toContain(base);
   });
 });

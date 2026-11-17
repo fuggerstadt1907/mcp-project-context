@@ -12,6 +12,8 @@ const REASON_LABELS: Record<SkipReason, string> = {
   denied: 'denied',
   extension: 'file type not allowed',
   outside_root: 'outside root',
+  exists: 'already exists',
+  unwritable: 'unwritable',
   no_frontmatter: 'no frontmatter',
   invalid_frontmatter: 'invalid frontmatter',
   missing_id: 'missing id',
