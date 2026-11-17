@@ -30,6 +30,8 @@ Read `docs/requirements.md` and `docs/architecture.md` before any change. Decisi
   Exception: `src/config.ts` may use `node:fs` directly to validate root and source dirs at startup.
   safe-fs needs a validated root first.
 - **All text returned to the client goes through `redact()`** at the output boundary, never earlier.
+- **Any transformation of user content (cut, merge, lowercase, slugify) runs on redacted text, or
+  its result is redacted again.** Found three times: snippets (07), overlap (03/07), slug (08).
 - **Write tools are only registered when `--allow-write` is set.** Not registered means not listed.
 - No network access in the default configuration.
 - No new runtime dependency without an ADR.
