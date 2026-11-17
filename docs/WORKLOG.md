@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 8 / 11 |
+| Tickets done | 9 / 11 |
 | Total time | 6,75 h |
-| Questions the agent asked before coding | 56 |
-| Agent mistakes caught in review | 39 |
+| Questions the agent asked before coding | 59 |
+| Agent mistakes caught in review | 43 |
 | Test coverage (src) | – |
 
 ## Template
@@ -424,6 +424,51 @@ Be honest: mistakes caught in review are the most valuable part.
   - Search quality on a real repository beyond the demo and the fixtures.
   - Over-masking of `(score N)` after a title ending in `password:` (noted as a follow-up).
 - PR: #20
+
+### Ticket 08 – Write tool behind a flag (2026-11-17)
+
+- Time: TODO
+- Skills used: implement-ticket
+- Questions the agent asked before coding: 3, in one round, plus a confirmation of the plan:
+  - Two parallel calls with different titles both took number 0006, because `wx` only catches
+    the same file name. The user chose an in-process queue: parallel calls all succeed with
+    consecutive numbers, and AC12's race case changed accordingly (decision 87).
+  - A missing `<adr-dir>` gives a tool error instead of creating it (decision 88).
+  - The output echoes the title, so the redaction shows in the result (decision 89).
+- Question after the review: a secret in the title reached the file name. The user chose to
+  redact the title before turning it into a slug (decision 90).
+- Decisions made (and where recorded):
+  - Decisions 87–92 in `docs/requirements.md`. 91 (numbering by name) and 92 (file layout,
+    title limits, size limit on write, new reasons `exists` and `unwritable`) were taken by the
+    agent under rule 7.
+  - `safe-fs.ts` gained `writeTextFile` (exclusive create, the only write path) and `listNames`.
+- Mistakes caught in review (fresh subagent):
+  - Numbering counted only files `listFiles` returned. An unreadable ADR or drafts behind a
+    symlinked `drafts/` were not counted, so the new draft got a number that was already taken.
+    Now names are counted through `listNames` (decision 91).
+  - Lowercasing the title hid an AWS key from the patterns, so it reached the file name on disk
+    and the returned path. The title is now redacted before slugify (decision 90).
+  - A file number beyond 2^53 produced an id like `1e+22`. Such numbers are now ignored.
+  - With `--adr-dir .` the text said "move it to ./". It now names the project root.
+- Agent check: the queue was taken out once to confirm that the parallel test then fails.
+- Tested: 46 new vitest tests, in `test/create-adr-draft.test.ts` and `test/safe-fs.test.ts`,
+  over `InMemoryTransport` + `Client` for the tool. They cover:
+  - AC11, AC24 and registration with the flag and its annotations.
+  - AC12 with 10 parallel calls, and a target that appears between numbering and write
+    (simulated with a `listNames` that cannot see it yet), for a directory and a broken symlink.
+  - `../../evil`, the raw file content against the redacted result, a secret in the slug, and a
+    missing ADR directory.
+  - A `drafts/` symlink pointing outside root, invalid titles, the size limit, and the audit line.
+  - A batch with failing calls that does not block the queue, and `get_adr` on a promoted draft
+    without warnings.
+  - safe-fs negative tests for `writeTextFile` (outside root, symlinked parent, deny list,
+    extension, NUL, existing file, directory, broken and outward symlinks, size, unwritable
+    directory) and for `listNames`.
+- Not tested:
+  - Two server processes writing at once (not serialised, decision 87).
+  - A symlink swapped in after the check and before the write (as decision 35).
+  - A full disk partway through a write.
+- PR: #
 
 ## Skill improvements
 
