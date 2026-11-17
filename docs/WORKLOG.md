@@ -8,7 +8,7 @@ Be honest: mistakes caught in review are the most valuable part.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 7 / 11 |
-| Total time | 4,75 h |
+| Total time | 5,58 h |
 | Questions the agent asked before coding | 53 |
 | Agent mistakes caught in review | 33 |
 | Test coverage (src) | – |
@@ -339,7 +339,7 @@ Be honest: mistakes caught in review are the most valuable part.
 
 ### Ticket 05b – ADR format variants (2026-11-17)
 
-- Time: TODO
+- Time: 50 min
 - Skills used: implement-ticket
 - Questions the agent asked before coding: 1. The plan, test points and branch were confirmed in
   one round. Decisions 73–77 from the grilling session left no gaps.
@@ -366,8 +366,10 @@ Be honest: mistakes caught in review are the most valuable part.
   `Superseded by …` cut, the MADR sections, invalid frontmatter with a warning without content,
   `1.5 release`), plus source order, empty and array values, an unclosed block, the MADR
   template's comment line and the thematic break.
+- Real-world check by the user: the adr-tools repository (9 Nygard ADRs) gives correct titles,
+  dates and statuses. Gap found: the links in the Status section (`Superseded by` / `Amended by`
+  targets) are not exposed. Noted as a v0.2 idea and a README limitation, no code change.
 - Not tested:
-  - Real-world ADR repositories beyond the fixtures.
   - A `## Status` section whose first line is a heading or a code fence (noted as a follow-up).
 - PR: #
 

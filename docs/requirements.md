@@ -368,6 +368,10 @@ Each ticket is testable on its own with `InMemoryTransport`.
 - Ticket 10: README documents the supported ADR formats (bullet, Nygard, MADR 3) with the source
   order and the `X by …` cut (decisions 73–79), and that a leading `---` thematic break is read as
   frontmatter.
+- v0.2 idea (ADR parser): expose the links of the Status section (`Superseded by` / `Amended by`
+  targets) as a `links` field. Found in a real-world check against the adr-tools repository.
+- Ticket 10: README Limitations must say that the targets of `Superseded by` / `Amended by` are
+  not returned; the status is cut to `Superseded` (decision 74) and only `adr://` shows the link.
 - Follow-up (ADR parser): the first non-empty line of a `## Status` section is taken as written, so
   `### Accepted` or a code fence there becomes the status. adr-tools never writes that. Strip
   heading markers if a real ADR needs it.
