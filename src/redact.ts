@@ -1,9 +1,11 @@
 // Masks secrets and personal data in text that leaves the server (ADR 0003).
 // Deliberately imports no logger: matched values must never be written anywhere.
 
-export type Finding = { type: string; index: number };
+// `index` is where the masked part starts. `match` is the whole pattern match, which can be wider:
+// the key of an assignment, `Bearer`, `scheme://`. A snippet must not cut into it (decision 80).
+export type Finding = { type: string; index: number; match: Span };
 
-type Span = [start: number, end: number];
+export type Span = [start: number, end: number];
 
 type Pattern = {
   type: string;
@@ -106,7 +108,7 @@ const PATTERNS: Pattern[] = [
   },
 ];
 
-type Range = { start: number; end: number; type: string };
+type Range = { start: number; end: number; type: string; match: Span };
 
 /** Replaces every match with `[REDACTED:<type>]`. `index` is the offset in the original text. */
 export function redact(text: string): { text: string; findings: Finding[] } {
@@ -120,7 +122,7 @@ export function redact(text: string): { text: string; findings: Finding[] } {
       if (!found) continue;
       const [start, end] = found;
       if (ranges.some((r) => start < r.end && r.start < end)) continue;
-      ranges.push({ start, end, type });
+      ranges.push({ start, end, type, match: [match.index, match.index + match[0].length] });
     }
   }
 
@@ -134,5 +136,8 @@ export function redact(text: string): { text: string; findings: Finding[] } {
   }
   out += text.slice(cursor);
 
-  return { text: out, findings: ranges.map(({ type, start }) => ({ type, index: start })) };
+  return {
+    text: out,
+    findings: ranges.map(({ type, start, match }) => ({ type, index: start, match })),
+  };
 }

@@ -27,7 +27,7 @@ describe('redact', () => {
   it('masks an email address', () => {
     const result = redact('Contact: maria.beispiel@example.com, thanks');
     expect(result.text).toBe('Contact: [REDACTED:email], thanks');
-    expect(result.findings).toEqual([{ type: 'email', index: 9 }]);
+    expect(result.findings).toEqual([{ type: 'email', index: 9, match: [9, 35] }]);
   });
 
   it.each([
@@ -141,9 +141,9 @@ describe('redact', () => {
     const result = redact(input);
     expect(result.text).toBe('[REDACTED:email], then [REDACTED:aws_key], then [REDACTED:email]');
     expect(result.findings).toEqual([
-      { type: 'email', index: 0 },
-      { type: 'aws_key', index: 20 },
-      { type: 'email', index: 47 },
+      { type: 'email', index: 0, match: [0, 13] },
+      { type: 'aws_key', index: 20, match: [20, 40] },
+      { type: 'email', index: 47, match: [47, 60] },
     ]);
   });
 
@@ -157,10 +157,21 @@ describe('redact', () => {
     expect(redact(input).text).toBe(expected);
   });
 
+  it.each([
+    ['assignment', 'password: hunter2x', [0, 18], 10],
+    ['auth_header', 'Authorization: Bearer abc123defg', [15, 32], 22],
+    ['url_credentials', 'see https://bob:s3cret@host', [4, 23], 12],
+  ])(
+    'reports the whole %s match, key included, next to the masked part',
+    (_type, input, match, index) => {
+      expect(redact(input).findings).toEqual([{ type: _type, index, match }]);
+    },
+  );
+
   it('prefers the specific type over assignment for the same value', () => {
     const result = redact(fake('token: ghp_', 'b'.repeat(36)));
     expect(result.text).toBe('token: [REDACTED:github_token]');
-    expect(result.findings).toEqual([{ type: 'github_token', index: 7 }]);
+    expect(result.findings).toEqual([{ type: 'github_token', index: 7, match: [7, 47] }]);
   });
 
   it('always masks emails, including example domains', () => {
