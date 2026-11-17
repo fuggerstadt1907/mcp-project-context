@@ -382,6 +382,7 @@ describe('ADR formats (FR-17)', () => {
   it('keeps the bullet format of the demo', async () => {
     const result = await call(DEMO, 'get_adr', { id: '1' });
     expect(result.structuredContent).toMatchObject({ status: 'Accepted', date: '2026-03-02' });
+    expect(templateWarnings()).toEqual([]);
   });
 
   it('reads a Nygard ADR: numbered title, Date line and Status section', async () => {
@@ -479,6 +480,14 @@ describe('ADR formats (FR-17)', () => {
     expect(JSON.stringify(parsed)).not.toMatch(/deciders|---/);
   });
 
+  it('reads frontmatter that keeps the comment line of the MADR template', async () => {
+    const parsed = await getAdr(
+      '---\n# These are optional elements. Feel free to remove any of them.\nstatus: accepted\n---\n# X\n',
+    );
+    expect(parsed.status).toBe('accepted');
+    expect(logLines().filter((line) => line.msg === 'ADR frontmatter ignored')).toEqual([]);
+  });
+
   it('prefers frontmatter to a bullet and a Status section', async () => {
     const parsed = await getAdr(
       '---\nstatus: "superseded by ADR-0009"\ndate: 2026-05-05\n---\n# X\n\n- Status: Accepted\n- Date: 2026-01-01\n\n## Status\n\nProposed\n',
@@ -499,14 +508,14 @@ describe('ADR formats (FR-17)', () => {
   it('lists an ADR with frontmatter outside the subset and warns without content', async () => {
     const root = tempRoot({
       'docs/adr/0001-x.md':
-        '---\nstatus: accepted\ndeciders:\n  - secret-name\n---\n# X\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n',
+        '---\nstatus: accepted\ndeciders:\n  - secret-name\n---\n# X\n\nDate: 2026-02-02\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n',
     });
 
     const listed = await call(root, 'list_adrs');
     const fetched = await call(root, 'get_adr', { id: '1' });
 
     expect(listed.structuredContent).toEqual({
-      adrs: [{ id: '0001', title: 'X', status: 'Proposed', date: '' }],
+      adrs: [{ id: '0001', title: 'X', status: 'Proposed', date: '2026-02-02' }],
     });
     expect(fetched.structuredContent).toMatchObject({ status: 'Proposed', context: 'Why.' });
     expect(JSON.stringify(fetched.structuredContent)).not.toContain('secret-name');
@@ -526,6 +535,21 @@ describe('ADR formats (FR-17)', () => {
     const parsed = await getAdr('---\n# X\n\n- Status: Accepted\n');
     expect(parsed).toMatchObject({ title: 'X', status: 'Accepted' });
     expect(logLines().filter((line) => line.msg === 'ADR frontmatter ignored')).toEqual([]);
+  });
+
+  it('takes nothing from the lines of an unclosed frontmatter block', async () => {
+    const parsed = await getAdr('---\nstatus: accepted\ndate: 2026-01-04\n# T\n\nBody.\n');
+    expect(parsed).toMatchObject({ title: 'T', status: 'Unknown', date: '' });
+  });
+
+  it('treats a leading thematic break with a later --- as invalid frontmatter', async () => {
+    const parsed = await getAdr(
+      '---\n\n# Title\n\n- Status: Accepted\n\n---\n\n## Context\n\nA.\n',
+    );
+    expect(parsed).toMatchObject({ title: 'some-slug', status: 'Unknown', context: 'A.' });
+    expect(logLines()).toContainEqual(
+      expect.objectContaining({ msg: 'ADR frontmatter ignored', line: 5 }),
+    );
   });
 
   it('finds ADRs of all three formats by status', async () => {

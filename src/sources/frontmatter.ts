@@ -1,6 +1,7 @@
 // Frontmatter parser for a fixed subset of YAML (requirements, Data & schema). No YAML dependency.
 // Each line is `key: value`; a value is a plain string, a quoted string or an inline array of
-// plain or quoted items. Anything else (block lists, nesting, multi-line values, comments,
+// plain or quoted items. Blank lines and lines starting with `#` (comments, as in the MADR 3
+// template) are skipped. Anything else (block lists, nesting, multi-line values, trailing comments,
 // anchors, flow maps) makes the whole block invalid, so callers can skip the file.
 
 export type FrontmatterValue = string | string[];
@@ -34,7 +35,7 @@ export function parseFrontmatter(markdown: string): FrontmatterResult {
   const body = lines.slice(end + 1).join('\n');
   for (let index = 1; index < end; index++) {
     const line = lines[index] as string;
-    if (line.trim() === '') continue;
+    if (line.trim() === '' || line.startsWith('#')) continue;
     const match = KEY_LINE.exec(line);
     if (!match) {
       return { kind: 'invalid', line: index + 1, problem: 'not a `key: value` line', body };

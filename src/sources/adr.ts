@@ -280,10 +280,11 @@ function stripNumber(title: string): string {
     .trim();
 }
 
-// Nygard's plain `Date: 2026-01-01` line, also in bold.
+// Nygard's plain `Date: 2026-01-01` line, also in bold. Case-sensitive, so the `date:` line of an
+// unclosed frontmatter block is not taken for it.
 function dateLine(lines: string[]): string | undefined {
   for (const line of lines) {
-    const match = /^\s*(?:\*\*)?date(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/i.exec(line);
+    const match = /^\s*(?:\*\*)?Date(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/.exec(line);
     if (match) return (match[1] as string).trim() || undefined;
   }
   return undefined;
