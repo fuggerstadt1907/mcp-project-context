@@ -62,7 +62,8 @@ export function registerSearchContext(server: McpServer, search: Search): void {
         const lines = results.map(
           (result, index) =>
             `${index + 1}. ${result.kind} ${result.id}  ${result.title}  (score ${result.score})\n` +
-            `   ${result.snippet}`,
+            // A snippet keeps its line breaks (see snippetAround); each line is indented.
+            `   ${result.snippet.replaceAll('\n', '\n   ')}`,
         );
         if (results.length === 0) lines.push(`No matches for "${query.trim()}".`);
         const text = [lines.join('\n'), skippedLine(skipped)].filter(Boolean).join('\n\n');

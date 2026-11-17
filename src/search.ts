@@ -70,10 +70,9 @@ export function createSearch(sources: {
       const listing = await sources.tickets.list();
       skipped.push(...listing.skipped);
       for (const ticket of listing.tickets) {
-        const criteria = ticket.acceptanceCriteria
-          .map((criterion) => `- [${criterion.done ? 'x' : ' '}] ${criterion.text}`)
-          .join('\n');
-        const labels = ticket.labels.length > 0 ? `Labels: ${ticket.labels.join(', ')}` : '';
+        // Only the values: added words like "Labels:" or "- [x]" would match queries on their own.
+        const criteria = ticket.acceptanceCriteria.map((criterion) => criterion.text).join('\n');
+        const labels = ticket.labels.join(' ');
         const body = [ticket.description, criteria, labels].filter(Boolean).join('\n\n');
         docs.push({ kind: 'ticket', id: ticket.id, title: ticket.title, body });
       }
@@ -132,9 +131,10 @@ export function createSearch(sources: {
 }
 
 /**
- * About 200 characters of `text` around offset `at`, on one line. Edges move to whitespace so
- * words stay whole, then outwards until no pattern match of redact() is cut: a cut secret would
- * no longer match its pattern at the output boundary and leak (decision 80). The snippet is not
+ * About 200 characters of `text` around offset `at`. Edges move to whitespace so words stay whole,
+ * then outwards until no pattern match of redact() is cut: a cut secret would no longer match its
+ * pattern at the output boundary and leak (decision 80). Line breaks stay, because some patterns
+ * end at them; only runs of spaces and tabs and blank lines are collapsed. The snippet is not
  * redacted here.
  */
 export function snippetAround(text: string, at: number): string {
@@ -167,8 +167,20 @@ export function snippetAround(text: string, at: number): string {
     }
   }
 
-  const body = text.slice(start, end).replace(/\s+/g, ' ').trim();
+  // Never split a surrogate pair when no whitespace was found near an edge.
+  if (start > 0 && isLowSurrogate(text.charCodeAt(start))) start--;
+  if (end < text.length && isLowSurrogate(text.charCodeAt(end))) end++;
+
+  const body = text
+    .slice(start, end)
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ ?(?:\r?\n|\r) ?(?:(?:\r?\n|\r) ?)*/g, '\n')
+    .trim();
   return `${start > 0 ? '…' : ''}${body}${end < text.length ? '…' : ''}`;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
 }
 
 function lastWhitespace(text: string, from: number, limit: number): number | undefined {

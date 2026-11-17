@@ -72,6 +72,31 @@ describe('search_context tool', () => {
     expect(keys(result)).toEqual(['ticket:T-003']);
   });
 
+  it('indents every line of a snippet under its result', async () => {
+    const root = tempRoot({ 'CONVENTIONS.md': 'First line.\nSecond with apple.\nThird.\n' });
+    const result = await call(root, 'search_context', { query: 'apple' });
+
+    expect(results(result)[0]?.snippet).toBe('First line.\nSecond with apple.\nThird.');
+    expect(text(result)).toBe(
+      '1. convention CONVENTIONS.md  CONVENTIONS.md  (score 1)\n' +
+        '   First line.\n   Second with apple.\n   Third.',
+    );
+  });
+
+  it('does not match words the search adds itself, like "Labels" or "[x]"', async () => {
+    const root = tempRoot({
+      'tickets/T-001.md': ticket(
+        'T-001',
+        'One',
+        'Body.\n\n## Acceptance criteria\n\n- [x] Done thing\n',
+        '[api]',
+      ),
+    });
+    expect(keys(await call(root, 'search_context', { query: 'labels' }))).toEqual([]);
+    expect(keys(await call(root, 'search_context', { query: '[x]' }))).toEqual([]);
+    expect(keys(await call(root, 'search_context', { query: 'done' }))).toEqual(['ticket:T-001']);
+  });
+
   it('searches ticket labels', async () => {
     const root = tempRoot({ 'tickets/T-001.md': ticket('T-001', 'One', 'Body.\n', '[payments]') });
     const result = await call(root, 'search_context', { query: 'payments' });
@@ -233,7 +258,7 @@ describe('search_context tool', () => {
 });
 
 describe('snippetAround', () => {
-  it('shows about 200 characters around the match, cut at whitespace, on one line', () => {
+  it('shows about 200 characters around the match, cut at whitespace, blank lines collapsed', () => {
     const words = Array.from({ length: 100 }, (_, n) => `word${n}`);
     const textIn = `${words.slice(0, 50).join(' ')}\n\nNEEDLE\n${words.slice(50).join(' ')}`;
 
@@ -242,7 +267,8 @@ describe('snippetAround', () => {
     expect(snippet).toContain('NEEDLE');
     expect(snippet.startsWith('…word')).toBe(true);
     expect(snippet.endsWith('…')).toBe(true);
-    expect(snippet).not.toContain('\n');
+    expect(snippet).toContain('\nNEEDLE\n');
+    expect(snippet).not.toContain('\n\n');
     expect(snippet.length).toBeGreaterThan(180);
     expect(snippet.length).toBeLessThan(240);
   });
@@ -283,6 +309,43 @@ describe('snippetAround', () => {
       }
     },
   );
+
+  // Review of ticket 07: joining lines let an unclosed quoted value run into the next line, where
+  // an earlier pattern won the overlap and the password stayed visible.
+  const lineCases = {
+    email: fake('password: "Zq7Wv3Kp9Lm2\ncontact: bob@', 'example.com\nmore'),
+    awsKey: fake('api_key = "Zq7Wv3Kp9Lm2\nkey AKIA', 'IOSFODNN7EXAMPLE\nmore'),
+    phone: fake('token: "Zq7Wv3Kp9Lm2\ncall +49 170', ' 1234567\nmore'),
+    spaces: fake(
+      'Authorization:   Bearer \t Yr8Xu4Jn6Hb1\n\n\n  db: https://bob:',
+      'Tc5Sd2Fg7Qw3@h',
+    ),
+  };
+  const prose = 'Some words here and\nthere on lines.  '.repeat(20);
+
+  it.each(Object.entries(lineCases))(
+    'keeps line breaks so redaction matches the file, %s, wherever the window falls',
+    (_name, secret) => {
+      const textIn = `${prose}${secret}\n${prose}`;
+      for (let at = 0; at <= textIn.length; at++) {
+        const shown = redact(snippetAround(textIn, at)).text;
+        for (const value of values) {
+          for (let i = 0; i + 4 <= value.length; i++) {
+            expect(shown, `at ${at}`).not.toContain(value.slice(i, i + 4));
+          }
+        }
+      }
+    },
+  );
+
+  it('does not split a surrogate pair at an edge', () => {
+    const textIn = `${'😀'.repeat(150)}NEEDLE${'😀'.repeat(150)}`;
+    const snippet = snippetAround(textIn, textIn.indexOf('NEEDLE'));
+    expect(snippet).toContain('NEEDLE');
+    expect(snippet).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
 
   it('moves the start back to the key when the window would begin inside it', () => {
     const textIn = `${filler}${secrets.assignment}${filler}${filler}`;
