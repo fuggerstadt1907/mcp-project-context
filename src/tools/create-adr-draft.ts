@@ -61,7 +61,8 @@ export function registerCreateAdrDraft(server: McpServer, safeFs: SafeFs, adrDir
         'overwrites a file. Use it when the user asks you to record a decision. Drafts are not ' +
         'returned by list_adrs or get_adr until a human moves them into the ADR directory. ' +
         'Example: title "Use Postgres for bookings".',
-      inputSchema: z.object({
+      // Strict: an extra field like `status: "Accepted"` is an error, not silently dropped.
+      inputSchema: z.strictObject({
         title: z.string().describe('One line, e.g. "Use Postgres for bookings".'),
         context: z.string().describe('Why a decision is needed: the forces and constraints.'),
         decision: z.string().describe('What is decided.'),

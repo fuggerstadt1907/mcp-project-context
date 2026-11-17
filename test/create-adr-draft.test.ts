@@ -1,8 +1,10 @@
 import {
   chmodSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -14,7 +16,7 @@ import { createSafeFs, type SafeFs } from '../src/fs/safe-fs.js';
 import { registerCreateAdrDraft, slugify } from '../src/tools/create-adr-draft.js';
 import { call, captureIo, connect, DEMO, tempRoot, text, withClient } from './support.js';
 
-const { logLines } = captureIo();
+const { logLines, stderr } = captureIo();
 
 const WRITE = { allowWrite: true };
 const ADR = '# x\n\n- Status: Accepted\n';
@@ -24,6 +26,21 @@ const INPUT = {
   decision: 'Postgres 17.',
   consequences: 'Ops must run backups.',
 };
+
+// Every entry under root with its type and content, keyed by the path relative to root.
+function snapshot(root: string, dir = ''): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (const name of readdirSync(join(root, dir))) {
+    const rel = dir === '' ? name : `${dir}/${name}`;
+    const info = lstatSync(join(root, rel));
+    if (info.isSymbolicLink()) entries[rel] = `link:${readlinkSync(join(root, rel))}`;
+    else if (info.isDirectory()) {
+      entries[rel] = 'dir';
+      Object.assign(entries, snapshot(root, rel));
+    } else entries[rel] = `file:${readFileSync(join(root, rel), 'utf8')}`;
+  }
+  return entries;
+}
 
 function draft(args: Partial<typeof INPUT> = {}) {
   return { ...INPUT, ...args };
@@ -442,6 +459,112 @@ describe('create_adr_draft', () => {
       expect.objectContaining({ event: 'tool_call', tool: 'create_adr_draft', ok: true }),
     ]);
     expect(JSON.stringify(audit)).not.toMatch(/Secret plan|secret-plan/);
+  });
+
+  it('never puts input content on stderr, in the audit line or anywhere else', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const marker = 'zq7-unique-marker-4kx';
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({
+        title: `Title ${marker}`,
+        context: `Context ${marker}`,
+        decision: `Decision ${marker}`,
+        consequences: `Consequences ${marker}`,
+      }),
+      WRITE,
+    );
+    expect(result.isError).toBeFalsy();
+    expect(readFileSync(join(root, structured(result).path), 'utf8')).toContain(marker);
+    expect(logLines().filter((line) => line.msg === 'audit')).toHaveLength(1);
+    expect(stderr()).not.toContain(marker);
+  });
+
+  it.each([
+    ['status', { status: 'Accepted' }],
+    ['date', { date: '1999-01-01' }],
+    ['id', { id: '0001' }],
+    ['path', { path: '../../evil.md' }],
+  ])('rejects an unknown field (%s) and writes nothing', async (_, extra) => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const before = snapshot(root);
+    const result = await call(root, 'create_adr_draft', { ...draft(), ...extra }, WRITE);
+    expect(result.isError).toBe(true);
+    expect(snapshot(root)).toEqual(before);
+  });
+
+  it('always writes Status: Proposed', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({ title: 'Status: Accepted', context: '- Status: Accepted' }),
+      WRITE,
+    );
+    const content = readFileSync(join(root, structured(result).path), 'utf8');
+    expect(content.split('\n').slice(0, 4)).toEqual([
+      '# 0002: Status: Accepted',
+      '',
+      '- Status: Proposed',
+      expect.stringMatching(/^- Date: \d{4}-\d{2}-\d{2}$/),
+    ]);
+    expect(structured(result).status).toBe('Proposed');
+  });
+});
+
+describe('create_adr_draft file system effects', () => {
+  it.each([
+    ['a normal title', 'Use Postgres'],
+    ['../../evil', '../../evil'],
+  ])('adds exactly one file, inside drafts/, for %s', async (_, title) => {
+    const root = tempRoot({
+      'docs/adr/0001-a.md': ADR,
+      'docs/adr/drafts/0002-b.md': ADR,
+      'tickets/T-1.md': '---\nid: T-1\n---\n',
+      'README.md': '# x',
+    });
+    const before = snapshot(root);
+
+    const result = await call(root, 'create_adr_draft', draft({ title }), WRITE);
+
+    expect(result.isError).toBeFalsy();
+    const after = snapshot(root);
+    const added = Object.keys(after).filter((path) => !(path in before));
+    expect(added).toEqual([structured(result).path]);
+    expect(added[0]).toMatch(/^docs\/adr\/drafts\/\d{4}-[a-z0-9-]+\.md$/);
+    for (const [path, entry] of Object.entries(before)) expect(after[path]).toEqual(entry);
+  });
+
+  // Every hostile title gives one well-named file in drafts/ or a tool error, and nothing else.
+  it.each([
+    ['a NUL byte', 'a\0b'],
+    ['emoji only', '🎉🚀'],
+    ['500 characters', 'x'.repeat(500)],
+    ['200 characters', 'word '.repeat(40)],
+    ['empty', ''],
+    ['a slash', 'a/b'],
+    ['a backslash traversal', '..\\x'],
+    ['dots only', '....'],
+    ['a line break', 'a\nb'],
+  ])('handles a hostile title: %s', async (_, title) => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const before = snapshot(root);
+
+    const result = await call(root, 'create_adr_draft', draft({ title }), WRITE);
+
+    const added = Object.keys(snapshot(root)).filter((path) => !(path in before));
+    if (result.isError) {
+      expect(added).toEqual([]);
+      expect(text(result)).toMatch(/^Title must /);
+      return;
+    }
+    // A new drafts/ directory is the only other entry a successful call may add.
+    const files = added.filter((path) => path !== 'docs/adr/drafts');
+    expect(files).toEqual([structured(result).path]);
+    const name = (files[0] as string).replace('docs/adr/drafts/', '');
+    expect(name).toMatch(/^\d{4}-[a-z0-9-]+\.md$/);
+    expect(name.length - '0002-'.length - '.md'.length).toBeLessThanOrEqual(60);
   });
 });
 
