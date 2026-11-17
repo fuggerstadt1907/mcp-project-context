@@ -371,7 +371,7 @@ Be honest: mistakes caught in review are the most valuable part.
   targets) are not exposed. Noted as a v0.2 idea and a README limitation, no code change.
 - Not tested:
   - A `## Status` section whose first line is a heading or a code fence (noted as a follow-up).
-- PR: #
+- PR: #19
 
 ## Skill improvements
 
