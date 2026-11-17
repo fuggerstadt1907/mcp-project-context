@@ -27,7 +27,7 @@ describe('redact', () => {
   it('masks an email address', () => {
     const result = redact('Contact: maria.beispiel@example.com, thanks');
     expect(result.text).toBe('Contact: [REDACTED:email], thanks');
-    expect(result.findings).toEqual([{ type: 'email', index: 9 }]);
+    expect(result.findings).toEqual([{ type: 'email', index: 9, end: 35, match: [9, 35] }]);
   });
 
   it.each([
@@ -141,9 +141,9 @@ describe('redact', () => {
     const result = redact(input);
     expect(result.text).toBe('[REDACTED:email], then [REDACTED:aws_key], then [REDACTED:email]');
     expect(result.findings).toEqual([
-      { type: 'email', index: 0 },
-      { type: 'aws_key', index: 20 },
-      { type: 'email', index: 47 },
+      { type: 'email', index: 0, end: 13, match: [0, 13] },
+      { type: 'aws_key', index: 20, end: 40, match: [20, 40] },
+      { type: 'email', index: 47, end: 60, match: [47, 60] },
     ]);
   });
 
@@ -157,10 +157,39 @@ describe('redact', () => {
     expect(redact(input).text).toBe(expected);
   });
 
+  it.each([
+    ['assignment', 'password: hunter2x', [0, 18], 10, 18],
+    ['auth_header', 'Authorization: Bearer abc123defg', [15, 32], 22, 32],
+    ['url_credentials', 'see https://bob:s3cret@host', [4, 23], 12, 22],
+  ])(
+    'reports the whole %s match, key included, next to the masked part',
+    (_type, input, match, index, end) => {
+      expect(redact(input).findings).toEqual([{ type: _type, index, end, match }]);
+    },
+  );
+
+  // Decisions 81 and 86: a match overlapping an earlier one is merged with it, not dropped.
+  it.each([
+    [fake('password = "hunter2xyz AKIA', 'IOSFODNN7EXAMPLE"'), 'password = "[REDACTED:aws_key]"'],
+    [fake('token: "s3cret ghp_', 'c'.repeat(36), '"'), 'token: "[REDACTED:github_token]"'],
+    [fake('api_key=hunter2xyz,bob@example.com'), 'api_key=[REDACTED:email]'],
+  ])('masks the whole assignment value around an earlier match: %s', (input, expected) => {
+    const result = redact(input);
+    expect(result.text).toBe(expected);
+    expect(result.findings).toHaveLength(1);
+    expect(redact(result.text).text).toBe(expected);
+  });
+
+  it('keeps the host of a URL with credentials visible (the password is not an email)', () => {
+    expect(redact(fake('postgres://bob:', 'pw1@db.internal/app')).text).toBe(
+      'postgres://[REDACTED:url_credentials]@db.internal/app',
+    );
+  });
+
   it('prefers the specific type over assignment for the same value', () => {
     const result = redact(fake('token: ghp_', 'b'.repeat(36)));
     expect(result.text).toBe('token: [REDACTED:github_token]');
-    expect(result.findings).toEqual([{ type: 'github_token', index: 7 }]);
+    expect(result.findings).toEqual([{ type: 'github_token', index: 7, end: 47, match: [0, 47] }]);
   });
 
   it('always masks emails, including example domains', () => {

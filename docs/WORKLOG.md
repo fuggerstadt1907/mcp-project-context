@@ -7,10 +7,10 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 7 / 11 |
-| Total time | 5,58 h |
-| Questions the agent asked before coding | 53 |
-| Agent mistakes caught in review | 33 |
+| Tickets done | 8 / 11 |
+| Total time | 6,75 h |
+| Questions the agent asked before coding | 56 |
+| Agent mistakes caught in review | 39 |
 | Test coverage (src) | – |
 
 ## Template
@@ -372,6 +372,58 @@ Be honest: mistakes caught in review are the most valuable part.
 - Not tested:
   - A `## Status` section whose first line is a heading or a code fence (noted as a follow-up).
 - PR: #19
+
+### Ticket 07 – Conventions and search (2026-11-17)
+
+- Time: 1h 10min
+- Skills used: implement-ticket
+- Questions the agent asked before coding: 3, in one round.
+  - How a snippet avoids cutting a secret. The user chose widening the window and added that it must
+    cover the whole pattern match, including the key of an assignment, `Bearer` and the URL scheme,
+    with negative tests where the window edge falls inside the key (decision 80).
+  - The text content of both tools (decision 82), and the plan and branch.
+- Questions after the review: 2. Keep line breaks in snippets (decision 80), and fix the overlap
+  bug in `redact()` in this PR (decision 81).
+- Decisions made (and where recorded):
+  - Decisions 80–86 in `docs/requirements.md`. 83–85 (search details, convention files, running
+    the performance test on its own) were taken by the agent under rule 7.
+  - `Finding` in `redact.ts` gained `match`, the span of the whole pattern match.
+- Mistakes caught in review (fresh subagent):
+  - Snippets were joined into one line. An unclosed quoted assignment value then ran into the next
+    line, an email or AWS key there won the overlap, and the password stayed visible. Snippets now
+    keep their line breaks.
+  - `redact()` dropped an `assignment` that overlapped an earlier match, so
+    `password = "hunter2 AKIA…"` showed `hunter2` in every tool. This bug came from ticket 03. Now
+    merged (decision 81). After this fix the line-break tests also pass against one-line snippets;
+    both layers protect on their own.
+- Invariant test asked for by the user before the PR (decision 86): every character a single
+  pattern masks must be masked in the combined output, for all pairs of the 11 types side by side,
+  inside each other's values and nested. It failed in 120 of 595 cases. Most were the email
+  pattern reading the password in `https://bob:pw@host` as an email; the email pattern now skips
+  it, so the host stays visible. The rest were real leaks: a dropped match left `bob:`, `+49 170` or
+  IBAN groups visible. All overlaps are now merged, not only `assignment`, folded into the same fix
+  commit.
+  - The performance test failed in 2 of 6 full runs (322 and 384 ms) because it shared the CPU with
+    other test workers. It now runs on its own (decision 85).
+  - The ticket search body contained `Labels:` and `- [x]`, so `labels` or `x` matched every
+    ticket. Now only the values are searched.
+  - A snippet edge without whitespace nearby could split a surrogate pair. Fixed.
+- Mistake the agent caught itself: the first exhaustive edge test had too little filler, so no
+  window edge ever fell inside the secret. Turning the widening off showed it; the filler was made
+  longer until every case went red without the widening.
+- Tested: 1002 vitest tests, 653 of them new for 07 (596 in the invariant test
+  `test/redact-overlap.test.ts`, the rest in `test/conventions.test.ts`, `test/search.test.ts`,
+  `test/perf.test.ts` and `test/redact.test.ts`), over `InMemoryTransport` + `Client` where a tool
+  is involved. They cover every acceptance criterion (AC7 order, AC8 on the demo, AC9 via a criterion,
+  empty query, the demo fake tokens never in the output, AC27 at about 100 ms for 500 files), plus
+  ties, the `kinds` and `limit` inputs, drafts, the skip line and reading again on every call. The
+  snippet tests try every window position around an assignment, a `Bearer` header, URL
+  credentials, a GitHub token, a private key and the three line-break cases from the review.
+- Not tested:
+  - The performance limit on slower machines or CI; measured only on this laptop.
+  - Search quality on a real repository beyond the demo and the fixtures.
+  - Over-masking of `(score N)` after a title ending in `password:` (noted as a follow-up).
+- PR: #20
 
 ## Skill improvements
 
