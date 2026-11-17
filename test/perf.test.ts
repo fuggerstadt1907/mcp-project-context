@@ -1,5 +1,6 @@
 // NFR-7 / AC27: search answers in under 300 ms on 500 markdown files, reading from disk on every
 // call (ADR 0004). If this fails, a cache comes back as a new ADR that supersedes ADR 0004.
+// `pnpm test` runs this file on its own after the other tests, so parallel workers do not skew it.
 import { describe, expect, it } from 'vitest';
 import { captureIo, tempRoot, withClient } from './support.js';
 
