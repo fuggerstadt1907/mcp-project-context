@@ -1,6 +1,6 @@
 # Requirements: mcp-project-context
 
-> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-17
+> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-18
 
 Version 0.2 · Owner: Alessandro Orlandi
 
@@ -232,7 +232,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 05b ADR format variants (#16) | FR-14, FR-17 | done · 2026-11-17 · ticket-05b-adr-formats |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | done · 2026-11-17 · ticket-07-conventions-search |
 | 08 Write tool | FR-9, NFR-4 | done · 2026-11-17 · ticket-08-write-tool |
-| 09 Integration tests | Goal, AC25, AC29 | open |
+| 09 Integration tests | Goal, AC25, AC29 | done · 2026-11-18 · ticket-09-integration-tests |
 | 10 README, demo, release | NFR-9, Goal (demo) | open |
 | 11 Stretch: GitHub Issues | Out of v0.1 scope | open |
 
@@ -360,6 +360,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 91 | Draft numbering details | Counts the names of `NNNN-*.md` entries directly in `<adr-dir>` and in `drafts/` through the new `safeFs.listNames()`, whatever their type and whether readable or not. A symlinked `drafts/` inside root is followed. Numbers beyond 2^53 are ignored. Decided by the agent under rule 7; the name count came from the review. | Counting only readable files gave a number that was already taken by an unreadable ADR or a draft behind a symlinked `drafts/` (found in review). |
 | 92 | Draft file and input details | Same layout as the demo ADRs: `# NNNN: Title`, `- Status: Proposed`, `- Date:` local date, then `## Context`, `## Decision`, `## Consequences`, each body trimmed. The title is trimmed, must not be empty, must be one line and at most 200 characters (a `fail()` in the handler, so it gets an audit line). `writeTextFile` refuses content over `--max-file-kb`, creates missing parents and uses `wx`; a broken symlink at the target counts as existing. New safe-fs reasons `exists` and `unwritable`. Decided by the agent under rule 7. | `get_adr` reads a promoted draft without warnings. The server never writes a file it would refuse to read. `wx` never follows a link at the target. |
 | 93 | Unknown input fields of `create_adr_draft` | The input schema is strict (`z.strictObject`): a call with an extra field such as `status: "Accepted"` is rejected by the SDK and writes nothing. The file always says `Status: Proposed`. An architecture test allows file system writes only in `safe-fs.ts`. Asked for by the user before the PR. | zod v4 drops unknown keys silently, so the agent believed it had set a status that never reached the file. |
+| 94 | Unknown input fields of the read-only tools | All tools build their input schema with `strictInput()` (`src/tools/input.ts`), a `z.strictObject` whose error reads `Unknown field(s): a, b`. Each name goes through `redact()`, values are never echoed. `list_adrs({ statuss: "accepted" })` is an error, not an unfiltered list. An architecture test checks that every tool file uses `strictInput`. Strict input asked for by the user at the start of ticket 09; redacting the names decided by the user after the review. | A typo in a filter returned everything without a hint. The SDK sends zod messages without `ok()`/`fail()`, so a secret used as a key name came back unredacted (found in review). |
+| 95 | Coverage check | `@vitest/coverage-v8` as a devDependency. `vitest.config.ts` sets 85 % for statements, branches, functions and lines on `src/fs/**`, `src/redact.ts` and `src/tools/**`. `pnpm test:coverage` runs them and CI runs it instead of `pnpm test`; `pnpm check` stays without coverage. Decided by the user. | A drop below 85 % turns CI red. `pnpm check` stays fast. Not a runtime dependency, so no ADR. |
+| 96 | Build for the stdio test | `test/stdio.test.ts` runs `pnpm build` in `beforeAll` and then spawns `dist/cli.js`. It sends initialize, tools/list and a tools/call `get_adr "2"`, each after the previous answer. Decided by the user; the extra requests asked for by the user. | The test always checks the current code, locally and in CI, where the build step comes after the tests. |
+| 97 | Decision 57 after ticket 09 | Kept. `test/e2e.test.ts` pins it: invalid input, an unknown tool and an unknown resource scheme write no audit line and do not echo input values. Decided by the user. | An SDK update that changes it shows up in the test. Unknown key names are now redacted (decision 94). |
+| 98 | Shape of the leak test | One constant with the four demo secrets, joined from parts (decision 43), plus distinctive parts of each. A sanity test checks that each secret is really in the fixtures. The session calls every tool for every ADR and ticket, six searches, every resource from resources/list and five error paths. It asserts that no secret is in any result, error or stderr line, and that all four masks appear. Decided by the agent under rule 7; the sanity test came from the review. | The masks show that the secret-bearing files were returned, so the test cannot pass empty. A wrong token length in the list was found in review. |
 
 ## Open points
 
@@ -376,8 +381,6 @@ Each ticket is testable on its own with `InMemoryTransport`.
   (decision 46).
 - Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
   reports as missing. This is CommonMark behaviour; kept.
-- Ticket 09: AC22 and AC26 end to end through real tools. Decide whether the missing audit line
-  for calls the SDK rejects early (decision 57) needs a fix.
 - Ticket 10: README documents the frontmatter subset, the allowed ticket id characters
   (decision 69) and that `README.md` files under `--tickets-dir` are ignored.
 - Ticket 10: README documents the supported ADR formats (bullet, Nygard, MADR 3) with the source
@@ -403,5 +406,8 @@ Each ticket is testable on its own with `InMemoryTransport`.
   leave an empty `drafts/` directory or, on a full disk, a truncated draft.
 - Follow-up (create_adr_draft): the audit `ms` of a queued call includes the time spent waiting
   for earlier calls (decision 87). Fine for drafts; split it if audit timings are ever analysed.
-- Follow-up (tools): the read-only tools still use `z.object`, which drops unknown input fields
-  silently. Make them strict too if an agent ever relies on a field that does not exist.
+- Follow-up (stdio test): it runs `pnpm build`, so `pnpm` must be on PATH. A runner started with
+  `npx vitest` without pnpm fails in `beforeAll`. `tsup --clean` also removes `dist/` for about a
+  second during `pnpm check`; a local MCP client started from `dist/` at that moment fails.
+- Follow-up (CI): the `pnpm build` step after the tests is now redundant (the stdio test builds).
+  Kept as an explicit check of the release build.
