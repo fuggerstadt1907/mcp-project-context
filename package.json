@@ -30,6 +30,7 @@
     "lint:fix": "biome check --write .",
     "test": "vitest run --exclude test/perf.test.ts && pnpm test:perf",
     "test:perf": "vitest run test/perf.test.ts",
+    "test:coverage": "vitest run --coverage --exclude test/perf.test.ts && pnpm test:perf",
     "test:watch": "vitest",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   },
@@ -41,6 +42,7 @@
     "@biomejs/biome": "^2.6.8",
     "@modelcontextprotocol/client": "2.4.0",
     "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "tsup": "^9.0.0",
     "tsx": "^4.20.0",
     "typescript": "^6.0.3",
