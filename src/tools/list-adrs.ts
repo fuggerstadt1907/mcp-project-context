@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { AdrSource } from '../sources/adr.js';
+import { strictInput } from './input.js';
 import { ok, withAudit } from './result.js';
 import { skippedLine } from './text.js';
 
@@ -22,7 +23,7 @@ export function registerListAdrs(server: McpServer, adrs: AdrSource, adrDir: str
         'date, sorted by id. Use it to find which ADR covers a topic before reading it with ' +
         'get_adr (e.g. id "0002"). Optional status filter, case-insensitive and exact, ' +
         'e.g. "accepted".',
-      inputSchema: z.strictObject({
+      inputSchema: strictInput({
         status: z
           .string()
           .optional()

@@ -101,10 +101,18 @@ describe('architecture', () => {
 
   // Every result goes through the output boundary in result.ts (ADR 0003, ADR 0005).
   it('every tool file wraps its handler in withAudit', () => {
-    const helpers = new Set(['result.ts', 'text.ts']);
-    const offenders = readdirSync(join(SRC, 'tools'))
-      .filter((name) => name.endsWith('.ts') && !helpers.has(name))
-      .filter((name) => !/\bwithAudit\(/.test(readFileSync(join(SRC, 'tools', name), 'utf8')));
+    const offenders = toolFiles().filter(
+      (name) => !/\bwithAudit\(/.test(readFileSync(join(SRC, 'tools', name), 'utf8')),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  // Unknown input fields are an error, and their names are redacted (decisions 93, 94).
+  it('every tool file builds its input schema with strictInput', () => {
+    const offenders = toolFiles().filter(
+      (name) =>
+        !/\binputSchema: strictInput\(/.test(readFileSync(join(SRC, 'tools', name), 'utf8')),
+    );
     expect(offenders).toEqual([]);
   });
 
@@ -122,3 +130,10 @@ describe('architecture', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+function toolFiles(): string[] {
+  const helpers = new Set(['input.ts', 'result.ts', 'text.ts']);
+  return readdirSync(join(SRC, 'tools')).filter(
+    (name) => name.endsWith('.ts') && !helpers.has(name),
+  );
+}
