@@ -488,6 +488,12 @@ Be honest: mistakes caught in review are the most valuable part.
   - Two server processes writing at once (not serialised, decision 87).
   - A symlink swapped in after the check and before the write (as decision 35).
   - A full disk partway through a write.
+  - Manual check by the user: registered the server with --allow-write and asked
+  Claude Code to create a draft. With auto mode off, Claude Code showed the tool,
+  all arguments and the tool description, and asked before writing. Answered
+  "No": nothing was written, drafts/ stayed empty. With auto mode on, the call
+  ran without asking, so the confirmation comes from the client, not the server.
+  Screenshot: docs/assets/write-permissions.png
 - PR: #21
 
 ## Skill improvements
