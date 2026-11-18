@@ -88,7 +88,7 @@ There are no roles or accounts. One server process serves one project root for o
 - **AC9 (FR-7)** Given a ticket whose only match for `"429"` is in an acceptance criterion, when `search_context` is called with `"429"`, then that ticket is in the results.
 - **AC10 (FR-8)** Given the demo project, when `adr://0002` is read, then the raw markdown comes back redacted.
 - **AC11 (FR-9)** Given ADRs 0001 to 0004 and a draft 0005, when `create_adr_draft` is called, then it writes `drafts/0006-<slug>.md`.
-- **AC12 (FR-9)** Given an existing target file or a race, when `create_adr_draft` is called, then it returns a tool error and the existing file is unchanged.
+- **AC12 (FR-9)** Given an existing entry at the target name, when `create_adr_draft` is called, then it returns a tool error and the entry is unchanged. Given 10 parallel calls in one server, then all succeed with consecutive numbers (decision 87).
 - **AC13 (FR-10)** Given an unknown ADR id, when `get_adr` is called, then it returns a tool error listing the available ids.
 - **AC14 (FR-12)** Given `T-012-login.md` with frontmatter `id: T-013`, when tickets are listed, then the ticket has id `T-013` and a warning is logged.
 - **AC15 (FR-12)** Given `a/x.md` and `b/y.md` both with `id: T-003`, when `get_ticket("T-003")` is called, then it returns the ticket from `a/x.md` and a warning names both files.
@@ -121,7 +121,8 @@ There are no roles or accounts. One server process serves one project root for o
 | Source directory missing | Server starts, empty list, hint naming the directory and flag (FR-16). |
 | Source directory outside root | Exit code 2 at startup (FR-1). |
 | Filter value with different casing | Matches (FR-11). |
-| Draft target exists or two drafts race | Exclusive create fails, tool error, nothing overwritten (FR-9). |
+| Draft target exists | Exclusive create fails, tool error, nothing overwritten (FR-9). |
+| Two drafts in parallel | Serialised in the server; consecutive numbers (decision 87). Two server processes on one repo are not serialised; exclusive create still prevents overwriting. |
 | Draft title like `../../evil` | Slug is sanitised; the file lands inside `drafts/`. |
 | Search term that is later redacted | The document is still found; the snippet shows `[REDACTED:<type>]` (ADR 0003). |
 | Empty search query | Tool error. |
@@ -230,7 +231,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 06 Ticket tools | FR-4, FR-5, FR-8 (ticket), FR-11, FR-12, FR-13, FR-15 | done · 2026-11-16 · ticket-06-ticket-tools |
 | 05b ADR format variants (#16) | FR-14, FR-17 | done · 2026-11-17 · ticket-05b-adr-formats |
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | done · 2026-11-17 · ticket-07-conventions-search |
-| 08 Write tool | FR-9, NFR-4 | open |
+| 08 Write tool | FR-9, NFR-4 | done · 2026-11-17 · ticket-08-write-tool |
 | 09 Integration tests | Goal, AC25, AC29 | open |
 | 10 README, demo, release | NFR-9, Goal (demo) | open |
 | 11 Stretch: GitHub Issues | Out of v0.1 scope | open |
@@ -352,6 +353,13 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 84 | Convention file details | Read through `safeFs.readTextFile`. A missing file is left out silently; a file that cannot be read (too large, unreadable) is left out, logged and counted in the skip line. Decided by the agent under rule 7. | FR-6 and FR-15. |
 | 85 | Running the NFR-7 test | `pnpm test` runs `test/perf.test.ts` on its own after the other tests (`pnpm test:perf`). It measures the first call, without warm-up: about 100 ms for 500 files. No cache is needed; ADR 0004 stands. Decided by the agent under rule 7. | In the parallel run other workers shared the CPU and the call took up to 447 ms (found in review). |
 | 86 | Invariant for overlapping patterns | Every character that a single pattern masks on its own is masked in the combined output. `test/redact-overlap.test.ts` checks it for all 11 types side by side, on two lines, after a comma, inside the value of an assignment, a `Bearer` header or URL credentials, and nested two deep. The email pattern no longer matches the password in `scheme://user:password@host`, so the host stays visible (decision 49). Asked for by the user before the ticket 07 PR. | The test failed in 120 of 595 cases before the fix. Most of them were the email pattern reading a URL password as an email; the rest were real leaks of dropped matches. |
+| 87 | Parallel `create_adr_draft` calls | Calls are serialised in the server process (promise queue) on top of exclusive create. Parallel calls all succeed with consecutive numbers; a tool error comes only from an entry that already exists at the target name. Two server processes on one repository are not serialised. Changes AC12, which asked for a tool error on a race. Decided by the user. | `wx` alone only catches the same file name; two titles racing for 0006 would both get it. One server serves one client, so an in-process queue covers the real case. |
+| 88 | `create_adr_draft` with a missing `<adr-dir>` | Tool error naming the directory and `--adr-dir`; nothing is written. `drafts/` itself is created when missing. Decided by the user. | A typo in `--adr-dir` must not silently create directories. Same hint as FR-16. |
+| 89 | Output of `create_adr_draft` | `structuredContent` `{ id, title, status, date, path }`, text `Created ADR draft 0006 "Title" at <path> (Proposed, <date>). Drafts are not listed by list_adrs; move it to <adr-dir>/ to accept it.` (`the project root` for `--adr-dir .`). Redacted through `ok()`. Decided by the user. | Echoing the title makes the redaction visible; the hint tells the agent why `list_adrs` will not show the draft. |
+| 90 | Slug of a draft | The title is redacted first, then NFKD-normalised, accents dropped, `ß` → `ss`, lowercased, every run outside `[a-z0-9]` becomes `-`, cut to 60 characters, `untitled` if empty. The heading in the file keeps the raw title. Redacting first was decided by the user after the review. | Lowercasing hid an AWS key from the patterns, so it reached the file name and the returned path (found in review). The slug can never hold `/`, `\`, `.` or NUL, so `../../evil` stays in `drafts/`. |
+| 91 | Draft numbering details | Counts the names of `NNNN-*.md` entries directly in `<adr-dir>` and in `drafts/` through the new `safeFs.listNames()`, whatever their type and whether readable or not. A symlinked `drafts/` inside root is followed. Numbers beyond 2^53 are ignored. Decided by the agent under rule 7; the name count came from the review. | Counting only readable files gave a number that was already taken by an unreadable ADR or a draft behind a symlinked `drafts/` (found in review). |
+| 92 | Draft file and input details | Same layout as the demo ADRs: `# NNNN: Title`, `- Status: Proposed`, `- Date:` local date, then `## Context`, `## Decision`, `## Consequences`, each body trimmed. The title is trimmed, must not be empty, must be one line and at most 200 characters (a `fail()` in the handler, so it gets an audit line). `writeTextFile` refuses content over `--max-file-kb`, creates missing parents and uses `wx`; a broken symlink at the target counts as existing. New safe-fs reasons `exists` and `unwritable`. Decided by the agent under rule 7. | `get_adr` reads a promoted draft without warnings. The server never writes a file it would refuse to read. `wx` never follows a link at the target. |
+| 93 | Unknown input fields of `create_adr_draft` | The input schema is strict (`z.strictObject`): a call with an extra field such as `status: "Accepted"` is rejected by the SDK and writes nothing. The file always says `Status: Proposed`. An architecture test allows file system writes only in `safe-fs.ts`. Asked for by the user before the PR. | zod v4 drops unknown keys silently, so the agent believed it had set a status that never reached the file. |
 
 ## Open points
 
@@ -390,3 +398,10 @@ Each ticket is testable on its own with `InMemoryTransport`.
   rest of the file. It is redacted to one `[REDACTED:private_key]`, so nothing leaks.
 - Ticket 10: README Limitations must say that search is plain keyword matching (decision 83) and
   that snippets keep line breaks.
+- Ticket 10: README Limitations must say that two server processes with `--allow-write` on the
+  same repository can give two drafts the same number (decision 87), and that a failed write can
+  leave an empty `drafts/` directory or, on a full disk, a truncated draft.
+- Follow-up (create_adr_draft): the audit `ms` of a queued call includes the time spent waiting
+  for earlier calls (decision 87). Fine for drafts; split it if audit timings are ever analysed.
+- Follow-up (tools): the read-only tools still use `z.object`, which drops unknown input fields
+  silently. Make them strict too if an agent ever relies on a field that does not exist.

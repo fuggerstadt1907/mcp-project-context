@@ -1,0 +1,586 @@
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/client';
+import { type CallToolResult, InMemoryTransport, McpServer } from '@modelcontextprotocol/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSafeFs, type SafeFs } from '../src/fs/safe-fs.js';
+import { registerCreateAdrDraft, slugify } from '../src/tools/create-adr-draft.js';
+import { call, captureIo, connect, DEMO, tempRoot, text, withClient } from './support.js';
+
+const { logLines, stderr } = captureIo();
+
+const WRITE = { allowWrite: true };
+const ADR = '# x\n\n- Status: Accepted\n';
+const INPUT = {
+  title: 'Use Postgres',
+  context: 'We need a database.',
+  decision: 'Postgres 17.',
+  consequences: 'Ops must run backups.',
+};
+
+// Every entry under root with its type and content, keyed by the path relative to root.
+function snapshot(root: string, dir = ''): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (const name of readdirSync(join(root, dir))) {
+    const rel = dir === '' ? name : `${dir}/${name}`;
+    const info = lstatSync(join(root, rel));
+    if (info.isSymbolicLink()) entries[rel] = `link:${readlinkSync(join(root, rel))}`;
+    else if (info.isDirectory()) {
+      entries[rel] = 'dir';
+      Object.assign(entries, snapshot(root, rel));
+    } else entries[rel] = `file:${readFileSync(join(root, rel), 'utf8')}`;
+  }
+  return entries;
+}
+
+function draft(args: Partial<typeof INPUT> = {}) {
+  return { ...INPUT, ...args };
+}
+
+function drafts(root: string, adrDir = 'docs/adr'): string[] {
+  return readdirSync(join(root, adrDir, 'drafts')).sort();
+}
+
+function structured(result: CallToolResult) {
+  return result.structuredContent as {
+    id: string;
+    title: string;
+    status: string;
+    date: string;
+    path: string;
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('create_adr_draft registration', () => {
+  it('is absent from listTools() without --allow-write (AC24)', async () => {
+    const client = await connect(DEMO);
+    const { tools } = await client.listTools();
+    await client.close();
+    expect(tools.map((tool) => tool.name)).not.toContain('create_adr_draft');
+  });
+
+  it('cannot be called without --allow-write', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    await expect(call(root, 'create_adr_draft', draft())).rejects.toThrow(
+      'Tool create_adr_draft not found',
+    );
+    expect(readdirSync(join(root, 'docs/adr'))).toEqual(['0001-a.md']);
+  });
+
+  it('is listed with --allow-write as a non-destructive write tool', async () => {
+    const client = await connect(DEMO, WRITE);
+    const { tools } = await client.listTools();
+    await client.close();
+    const tool = tools.find((candidate) => candidate.name === 'create_adr_draft');
+    expect(tool?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    });
+    expect(tool?.outputSchema).toBeDefined();
+  });
+});
+
+describe('create_adr_draft', () => {
+  it('numbers after the highest ADR or draft (AC11)', async () => {
+    const root = tempRoot({
+      'docs/adr/0001-a.md': ADR,
+      'docs/adr/0002-b.md': ADR,
+      'docs/adr/0003-c.md': ADR,
+      'docs/adr/0004-d.md': ADR,
+      'docs/adr/drafts/0005-e.md': ADR,
+    });
+
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+
+    expect(result.isError).toBeFalsy();
+    expect(structured(result)).toMatchObject({
+      id: '0006',
+      path: 'docs/adr/drafts/0006-use-postgres.md',
+    });
+    expect(drafts(root)).toEqual(['0005-e.md', '0006-use-postgres.md']);
+  });
+
+  it('counts accepted ADRs above the drafts, gaps and numbers over 9999', async () => {
+    const gap = tempRoot({ 'docs/adr/0001-a.md': ADR, 'docs/adr/0007-b.md': ADR });
+    expect(structured(await call(gap, 'create_adr_draft', draft(), WRITE)).id).toBe('0008');
+
+    const big = tempRoot({ 'docs/adr/9999-a.md': ADR, 'docs/adr/drafts/0003-b.md': ADR });
+    expect(structured(await call(big, 'create_adr_draft', draft(), WRITE)).id).toBe('10000');
+  });
+
+  it('starts at 0001 and creates drafts/ in an empty ADR directory', async () => {
+    const root = tempRoot({ 'docs/adr/README.md': '# ADRs' });
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    expect(structured(result).path).toBe('docs/adr/drafts/0001-use-postgres.md');
+  });
+
+  it('ignores files that are not ADRs and other subdirectories', async () => {
+    const root = tempRoot({
+      'docs/adr/0002-a.md': ADR,
+      'docs/adr/template.md': ADR,
+      'docs/adr/archive/0042-old.md': ADR,
+      'docs/adr/drafts/notes.md': ADR,
+      'docs/adr/drafts/nested/0050-x.md': ADR,
+    });
+    expect(structured(await call(root, 'create_adr_draft', draft(), WRITE)).id).toBe('0003');
+  });
+
+  it('counts an ADR that is too large to read', async () => {
+    const root = tempRoot({ 'docs/adr/0004-big.md': 'x'.repeat(2048) });
+    const result = await call(root, 'create_adr_draft', draft(), { ...WRITE, maxFileKb: 1 });
+    expect(structured(result).id).toBe('0005');
+  });
+
+  it('writes the template with status Proposed and the local date', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 17, 23, 30));
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+
+    expect(readFileSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'), 'utf8')).toBe(
+      [
+        '# 0002: Use Postgres',
+        '',
+        '- Status: Proposed',
+        '- Date: 2026-11-17',
+        '',
+        '## Context',
+        '',
+        'We need a database.',
+        '',
+        '## Decision',
+        '',
+        'Postgres 17.',
+        '',
+        '## Consequences',
+        '',
+        'Ops must run backups.',
+        '',
+      ].join('\n'),
+    );
+    expect(structured(result)).toEqual({
+      id: '0002',
+      title: 'Use Postgres',
+      status: 'Proposed',
+      date: '2026-11-17',
+      path: 'docs/adr/drafts/0002-use-postgres.md',
+    });
+    expect(text(result)).toBe(
+      'Created ADR draft 0002 "Use Postgres" at docs/adr/drafts/0002-use-postgres.md ' +
+        '(Proposed, 2026-11-17). Drafts are not listed by list_adrs; move it to docs/adr/ to ' +
+        'accept it.',
+    );
+  });
+
+  it('writes a draft that get_adr can read once it is moved into the ADR directory', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    await call(root, 'create_adr_draft', draft(), WRITE);
+    const content = readFileSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'), 'utf8');
+    const promoted = tempRoot({ 'docs/adr/0002-use-postgres.md': content });
+
+    const result = await call(promoted, 'get_adr', { id: '2' });
+
+    expect(result.structuredContent).toMatchObject({
+      id: '0002',
+      title: 'Use Postgres',
+      status: 'Proposed',
+      context: 'We need a database.',
+      decision: 'Postgres 17.',
+      consequences: 'Ops must run backups.',
+    });
+    expect(logLines().filter((line) => line.level === 'warn')).toEqual([]);
+  });
+
+  it('is not listed by list_adrs', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    await call(root, 'create_adr_draft', draft(), WRITE);
+    const result = await call(root, 'list_adrs');
+    expect(result.structuredContent).toMatchObject({ adrs: [{ id: '0001' }] });
+  });
+
+  it('gives parallel calls distinct consecutive numbers (AC12)', async () => {
+    const root = tempRoot({
+      'docs/adr/0004-d.md': ADR,
+      'docs/adr/drafts/0005-e.md': ADR,
+    });
+
+    const results = await withClient(
+      root,
+      (client) =>
+        Promise.all(
+          Array.from(
+            { length: 10 },
+            (_, i) =>
+              client.callTool({
+                name: 'create_adr_draft',
+                arguments: draft({ title: `Same title ${i % 2}` }),
+              }) as Promise<CallToolResult>,
+          ),
+        ),
+      WRITE,
+    );
+
+    expect(results.every((result) => !result.isError)).toBe(true);
+    const ids = results.map((result) => structured(result).id).sort();
+    expect(ids).toEqual(Array.from({ length: 10 }, (_, i) => String(i + 6).padStart(4, '0')));
+    expect(drafts(root)).toHaveLength(11);
+  });
+
+  it('returns a tool error and leaves an entry unchanged that appears after numbering (AC12)', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    // Another process creates the target between numbering and write: listNames does not see it yet.
+    mkdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'), { recursive: true });
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/adr/drafts/0002-other.md'));
+    const original = '# 0002: Kept\n\nWritten by someone else.\n';
+    writeFileSync(join(root, 'docs/adr/drafts/0002-kept.md'), original);
+    const real = createSafeFs({ root, maxFileKb: 256 });
+    const racing: SafeFs = {
+      ...real,
+      listNames: async (dir) => (dir.endsWith('drafts') ? [] : real.listNames(dir)),
+    };
+    const server = new McpServer(
+      { name: 'test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    );
+    registerCreateAdrDraft(server, racing, 'docs/adr');
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await client.connect(clientTransport);
+
+    const dir = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft(),
+    })) as CallToolResult;
+    const link = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft({ title: 'Other' }),
+    })) as CallToolResult;
+    const file = (await client.callTool({
+      name: 'create_adr_draft',
+      arguments: draft({ title: 'Kept' }),
+    })) as CallToolResult;
+    await client.close();
+
+    for (const result of [dir, link, file]) {
+      expect(result.isError).toBe(true);
+      expect(text(result)).toMatch(/already exists\. Nothing was written\./);
+    }
+    expect(text(dir)).toContain('docs/adr/drafts/0002-use-postgres.md');
+    expect(drafts(root)).toEqual(['0002-kept.md', '0002-other.md', '0002-use-postgres.md']);
+    expect(readFileSync(join(root, 'docs/adr/drafts/0002-kept.md'), 'utf8')).toBe(original);
+    expect(readdirSync(join(root, 'docs/adr/drafts/0002-use-postgres.md'))).toEqual([]);
+    expect(readdirSync(root)).not.toContain('nowhere.md');
+  });
+
+  it('counts names it cannot read: a directory, a broken symlink, an unreadable file', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR, 'docs/adr/0007-locked.md': ADR });
+    mkdirSync(join(root, 'docs/adr/drafts/0008-dir.md'), { recursive: true });
+    symlinkSync(join(root, 'nowhere.md'), join(root, 'docs/adr/drafts/0009-broken.md'));
+    chmodSync(join(root, 'docs/adr/0007-locked.md'), 0o000);
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    chmodSync(join(root, 'docs/adr/0007-locked.md'), 0o644);
+    expect(structured(result).id).toBe('0010');
+  });
+
+  it('counts drafts behind a symlinked drafts/ directory inside root', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR, 'other/0009-z.md': ADR });
+    symlinkSync(join(root, 'other'), join(root, 'docs/adr/drafts'));
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    expect(structured(result).path).toBe('docs/adr/drafts/0010-use-postgres.md');
+    expect(readdirSync(join(root, 'other')).sort()).toEqual(['0009-z.md', '0010-use-postgres.md']);
+  });
+
+  it('ignores numbers too large to be exact', async () => {
+    const root = tempRoot({
+      'docs/adr/0003-a.md': ADR,
+      'docs/adr/99999999999999999999-huge.md': ADR,
+    });
+    expect(structured(await call(root, 'create_adr_draft', draft(), WRITE)).id).toBe('0004');
+  });
+
+  it('keeps serving after a failed call in a parallel batch', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const titles = ['A', '', 'B', 'x\ny', 'C'];
+    const results = await withClient(
+      root,
+      (client) =>
+        Promise.all(
+          titles.map(
+            (title) =>
+              client.callTool({
+                name: 'create_adr_draft',
+                arguments: draft({ title }),
+              }) as Promise<CallToolResult>,
+          ),
+        ),
+      WRITE,
+    );
+    expect(results.map((result) => Boolean(result.isError))).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(drafts(root)).toEqual(['0002-a.md', '0003-b.md', '0004-c.md']);
+  });
+
+  it('names the project root when --adr-dir is .', async () => {
+    const root = tempRoot({ '0001-a.md': ADR });
+    const result = await call(root, 'create_adr_draft', draft(), { ...WRITE, adrDir: '.' });
+    expect(structured(result).path).toBe('drafts/0002-use-postgres.md');
+    expect(text(result)).toContain('move it to the project root to accept it.');
+  });
+
+  it('masks a secret in the title before it becomes the file name', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const key = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
+
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({ title: `Rotate ${key} now` }),
+      WRITE,
+    );
+
+    expect(structured(result).path).toBe('docs/adr/drafts/0002-rotate-redacted-aws-key-now.md');
+    expect(drafts(root)).toEqual(['0002-rotate-redacted-aws-key-now.md']);
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(key, 'i'));
+    const content = readFileSync(join(root, structured(result).path), 'utf8');
+    expect(content).toContain(`# 0002: Rotate ${key} now`);
+    // The audit line counts the masked key (title in text and structuredContent) and holds no
+    // part of the title or the slug.
+    const audit = logLines().filter((line) => line.msg === 'audit');
+    expect(audit).toEqual([
+      expect.objectContaining({ tool: 'create_adr_draft', ok: true, redactions: 2 }),
+    ]);
+    expect(JSON.stringify(audit)).not.toMatch(new RegExp(`${key}|rotate|aws-key`, 'i'));
+  });
+
+  it('keeps a title like ../../evil inside drafts/', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+
+    const result = await call(root, 'create_adr_draft', draft({ title: '../../evil' }), WRITE);
+
+    expect(structured(result).path).toBe('docs/adr/drafts/0002-evil.md');
+    expect(drafts(root)).toEqual(['0002-evil.md']);
+    expect(readdirSync(root).sort()).toEqual(['docs']);
+    expect(readdirSync(join(root, 'docs')).sort()).toEqual(['adr']);
+  });
+
+  it('writes the content unredacted and redacts the returned text', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const email = ['alice', 'example.com'].join('@');
+
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({ title: `Ask ${email}`, context: `Contact ${email}.` }),
+      WRITE,
+    );
+
+    const path = structured(result).path;
+    const content = readFileSync(join(root, path), 'utf8');
+    expect(content).toContain(`# 0002: Ask ${email}`);
+    expect(content).toContain(`Contact ${email}.`);
+    expect(JSON.stringify(result)).not.toContain(email);
+    expect(structured(result).title).toBe('Ask [REDACTED:email]');
+    expect(text(result)).toContain('"Ask [REDACTED:email]"');
+  });
+
+  it('fails with the flag to set when the ADR directory is missing', async () => {
+    const root = tempRoot({ 'README.md': '# x' });
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+    expect(result.isError).toBe(true);
+    expect(text(result)).toBe(
+      'ADR directory not found: docs/adr. Set --adr-dir if your ADRs live elsewhere. ' +
+        'Nothing was written.',
+    );
+    expect(readdirSync(root)).toEqual(['README.md']);
+  });
+
+  it('fails when drafts/ is a symlink that points outside root', async () => {
+    const outside = tempRoot({});
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    symlinkSync(outside, join(root, 'docs/adr/drafts'));
+
+    const result = await call(root, 'create_adr_draft', draft(), WRITE);
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain('outside the project root');
+    expect(text(result)).not.toContain(outside);
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it.each([
+    ['an empty title', { title: '   ' }, 'Title must not be empty.'],
+    ['a title with a line break', { title: 'a\nb' }, 'Title must be a single line.'],
+    ['a title over 200 characters', { title: 'x'.repeat(201) }, 'Title must be at most 200'],
+  ])('fails for %s and writes nothing', async (_, args, message) => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const result = await call(root, 'create_adr_draft', draft(args), WRITE);
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain(message);
+    expect(readdirSync(join(root, 'docs/adr'))).toEqual(['0001-a.md']);
+  });
+
+  it('fails when the draft is larger than --max-file-kb', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const result = await call(root, 'create_adr_draft', draft({ context: 'x'.repeat(2048) }), {
+      ...WRITE,
+      maxFileKb: 1,
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain('larger than 1 KB');
+    expect(readdirSync(join(root, 'docs/adr'))).toEqual(['0001-a.md']);
+  });
+
+  it('writes one audit line without arguments or content', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    await call(root, 'create_adr_draft', draft({ title: 'Secret plan' }), WRITE);
+    const audit = logLines().filter((line) => line.msg === 'audit');
+    expect(audit).toEqual([
+      expect.objectContaining({ event: 'tool_call', tool: 'create_adr_draft', ok: true }),
+    ]);
+    expect(JSON.stringify(audit)).not.toMatch(/Secret plan|secret-plan/);
+  });
+
+  it('never puts input content on stderr, in the audit line or anywhere else', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const marker = 'zq7-unique-marker-4kx';
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({
+        title: `Title ${marker}`,
+        context: `Context ${marker}`,
+        decision: `Decision ${marker}`,
+        consequences: `Consequences ${marker}`,
+      }),
+      WRITE,
+    );
+    expect(result.isError).toBeFalsy();
+    expect(readFileSync(join(root, structured(result).path), 'utf8')).toContain(marker);
+    expect(logLines().filter((line) => line.msg === 'audit')).toHaveLength(1);
+    expect(stderr()).not.toContain(marker);
+  });
+
+  it.each([
+    ['status', { status: 'Accepted' }],
+    ['date', { date: '1999-01-01' }],
+    ['id', { id: '0001' }],
+    ['path', { path: '../../evil.md' }],
+  ])('rejects an unknown field (%s) and writes nothing', async (_, extra) => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const before = snapshot(root);
+    const result = await call(root, 'create_adr_draft', { ...draft(), ...extra }, WRITE);
+    expect(result.isError).toBe(true);
+    expect(snapshot(root)).toEqual(before);
+  });
+
+  it('always writes Status: Proposed', async () => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const result = await call(
+      root,
+      'create_adr_draft',
+      draft({ title: 'Status: Accepted', context: '- Status: Accepted' }),
+      WRITE,
+    );
+    const content = readFileSync(join(root, structured(result).path), 'utf8');
+    expect(content.split('\n').slice(0, 4)).toEqual([
+      '# 0002: Status: Accepted',
+      '',
+      '- Status: Proposed',
+      expect.stringMatching(/^- Date: \d{4}-\d{2}-\d{2}$/),
+    ]);
+    expect(structured(result).status).toBe('Proposed');
+  });
+});
+
+describe('create_adr_draft file system effects', () => {
+  it.each([
+    ['a normal title', 'Use Postgres'],
+    ['../../evil', '../../evil'],
+  ])('adds exactly one file, inside drafts/, for %s', async (_, title) => {
+    const root = tempRoot({
+      'docs/adr/0001-a.md': ADR,
+      'docs/adr/drafts/0002-b.md': ADR,
+      'tickets/T-1.md': '---\nid: T-1\n---\n',
+      'README.md': '# x',
+    });
+    const before = snapshot(root);
+
+    const result = await call(root, 'create_adr_draft', draft({ title }), WRITE);
+
+    expect(result.isError).toBeFalsy();
+    const after = snapshot(root);
+    const added = Object.keys(after).filter((path) => !(path in before));
+    expect(added).toEqual([structured(result).path]);
+    expect(added[0]).toMatch(/^docs\/adr\/drafts\/\d{4}-[a-z0-9-]+\.md$/);
+    for (const [path, entry] of Object.entries(before)) expect(after[path]).toEqual(entry);
+  });
+
+  // Every hostile title gives one well-named file in drafts/ or a tool error, and nothing else.
+  it.each([
+    ['a NUL byte', 'a\0b'],
+    ['emoji only', '🎉🚀'],
+    ['500 characters', 'x'.repeat(500)],
+    ['200 characters', 'word '.repeat(40)],
+    ['empty', ''],
+    ['a slash', 'a/b'],
+    ['a backslash traversal', '..\\x'],
+    ['dots only', '....'],
+    ['a line break', 'a\nb'],
+  ])('handles a hostile title: %s', async (_, title) => {
+    const root = tempRoot({ 'docs/adr/0001-a.md': ADR });
+    const before = snapshot(root);
+
+    const result = await call(root, 'create_adr_draft', draft({ title }), WRITE);
+
+    const added = Object.keys(snapshot(root)).filter((path) => !(path in before));
+    if (result.isError) {
+      expect(added).toEqual([]);
+      expect(text(result)).toMatch(/^Title must /);
+      return;
+    }
+    // A new drafts/ directory is the only other entry a successful call may add.
+    const files = added.filter((path) => path !== 'docs/adr/drafts');
+    expect(files).toEqual([structured(result).path]);
+    const name = (files[0] as string).replace('docs/adr/drafts/', '');
+    expect(name).toMatch(/^\d{4}-[a-z0-9-]+\.md$/);
+    expect(name.length - '0002-'.length - '.md'.length).toBeLessThanOrEqual(60);
+  });
+});
+
+describe('slugify', () => {
+  it.each([
+    ['Use Postgres', 'use-postgres'],
+    ['../../evil', 'evil'],
+    ['/etc/passwd', 'etc-passwd'],
+    ['C:\\Windows\\x', 'c-windows-x'],
+    ['Überall Grüße, café!', 'uberall-grusse-cafe'],
+    ['a\0b', 'a-b'],
+    ['...', 'untitled'],
+    ['日本語', 'untitled'],
+    [`${'x'.repeat(30)} ${'y'.repeat(40)}`, `${'x'.repeat(30)}-${'y'.repeat(29)}`],
+    [`${'a'.repeat(59)} b`, 'a'.repeat(59)],
+  ])('%s → %s', (title, slug) => {
+    expect(slugify(title)).toBe(slug);
+  });
+});

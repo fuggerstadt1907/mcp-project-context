@@ -7,6 +7,7 @@ import { createSearch } from './search.js';
 import { createAdrSource } from './sources/adr.js';
 import { createConventionSource } from './sources/conventions.js';
 import { createTicketSource } from './sources/tickets.js';
+import { registerCreateAdrDraft } from './tools/create-adr-draft.js';
 import { registerGetAdr } from './tools/get-adr.js';
 import { registerGetConventions } from './tools/get-conventions.js';
 import { registerGetTicket } from './tools/get-ticket.js';
@@ -37,5 +38,7 @@ export function createServer(config: Config): McpServer {
   registerTicketResource(server, tickets);
   registerGetConventions(server, conventions);
   registerSearchContext(server, createSearch({ adrs, tickets, conventions }));
+  // Not registered means not listed: without --allow-write the server cannot write (ADR 0002).
+  if (config.allowWrite) registerCreateAdrDraft(server, safeFs, config.adrDir);
   return server;
 }

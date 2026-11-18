@@ -15,12 +15,19 @@ With explicit opt-in, the agent can propose a new decision as an ADR draft.
 - Register it **only** when `config.allowWrite` is true (ADR 0002).
 - Annotations: `readOnlyHint: false`, `destructiveHint: false`, `idempotentHint: false`.
 
+## Decisions
+
+Recorded as requirements decisions 87–93: parallel calls are serialised (87), missing ADR
+directory (88), output (89), slug with redaction first (90), numbering by name (91), file and
+input details (92), strict input schema (93).
+
 ## Acceptance criteria
 
-- [ ] Numbering: highest number across `<adrDir>` and `<adrDir>/drafts/`, plus one
+- [x] Numbering: highest number across `<adrDir>` and `<adrDir>/drafts/`, plus one
       (requirements decision 6). With ADRs 0001 to 0004 and draft 0005, the next draft is 0006.
-- [ ] Without the flag, `listTools()` does not contain `create_adr_draft`.
-- [ ] Never overwrites: a race or existing file returns a tool error.
-- [ ] A title like `../../evil` produces a safe slug inside `drafts/`.
-- [ ] Draft content is not redacted on write (it is the user's own input), but the returned
+- [x] Without the flag, `listTools()` does not contain `create_adr_draft`.
+- [x] Never overwrites: an existing entry at the target returns a tool error. Parallel calls in
+      one server all succeed with consecutive numbers (requirements decision 87).
+- [x] A title like `../../evil` produces a safe slug inside `drafts/`.
+- [x] Draft content is not redacted on write (it is the user's own input), but the returned
       text is.
