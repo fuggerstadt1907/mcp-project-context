@@ -28,7 +28,7 @@ export function registerGetTicket(
         'flag). Use it before implementing a ticket and to cite its acceptance criteria. ' +
         'Accepts an id like "T-003", case-insensitive. Call list_tickets first if you do not ' +
         'know the id.',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         id: z.string().describe('Ticket id from the frontmatter, e.g. "T-003".'),
       }),
       outputSchema: TicketSchema,

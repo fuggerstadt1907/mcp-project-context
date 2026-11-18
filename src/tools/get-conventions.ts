@@ -16,7 +16,7 @@ export function registerGetConventions(server: McpServer, conventions: Conventio
         "Read the project's rules for contributors and coding agents: CONVENTIONS.md, " +
         'CONTRIBUTING.md, CLAUDE.md and AGENTS.md from the project root, in that order. Files ' +
         'that do not exist are left out. Use it before writing code or opening a PR.',
-      inputSchema: z.object({}),
+      inputSchema: z.strictObject({}),
       outputSchema: z.object({ files: z.array(ConventionFileSchema) }),
       annotations: { readOnlyHint: true },
     },

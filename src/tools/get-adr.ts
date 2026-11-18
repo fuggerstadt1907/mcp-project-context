@@ -28,7 +28,7 @@ export function registerGetAdr(
         'Read one architecture decision record by id, split into context, decision and ' +
         'consequences. Use it to cite what was decided and why. Accepts "2" or "0002". ' +
         'Call list_adrs first if you do not know the id.',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         id: z.string().describe('ADR number, e.g. "0002" or "2".'),
       }),
       outputSchema: AdrSchema,

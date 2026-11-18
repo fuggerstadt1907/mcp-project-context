@@ -24,7 +24,7 @@ export function registerSearchContext(server: McpServer, search: Search): void {
         'e.g. query "authentication". Every word counts, case-insensitive; title matches rank ' +
         'higher. Returns kind, id, title, score and a short snippet; read the full document ' +
         'with get_adr, get_ticket or get_conventions.',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         query: z.string().max(500).describe('Words to look for, e.g. "rate limit".'),
         kinds: z
           .array(z.enum(SEARCH_KINDS))

@@ -26,7 +26,7 @@ export function registerListTickets(
         'to find the ticket you work on before reading it with get_ticket (e.g. id "T-003"). ' +
         'Optional status and label filters, case-insensitive and exact, combined with AND, ' +
         'e.g. status "todo" and label "api".',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         status: z.string().optional().describe('Only tickets with this status, e.g. "todo".'),
         label: z.string().optional().describe('Only tickets with this label, e.g. "api".'),
       }),

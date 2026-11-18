@@ -22,7 +22,7 @@ export function registerListAdrs(server: McpServer, adrs: AdrSource, adrDir: str
         'date, sorted by id. Use it to find which ADR covers a topic before reading it with ' +
         'get_adr (e.g. id "0002"). Optional status filter, case-insensitive and exact, ' +
         'e.g. "accepted".',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         status: z
           .string()
           .optional()
