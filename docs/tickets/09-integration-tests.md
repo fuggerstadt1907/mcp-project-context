@@ -17,10 +17,10 @@ Prove the whole server works end to end, the way an agent will use it.
 
 ## Decisions
 
-Recorded as requirements decisions 94–98: strict input with redacted key names for all tools (94),
+Recorded as requirements decisions 94–99: strict input with redacted key names for all tools (94),
 coverage thresholds in CI via `pnpm test:coverage` (95), the stdio test builds itself and also
 sends tools/list and tools/call (96), decision 57 kept and pinned by a test (97), shape of the
-leak test (98).
+leak test (98), redaction of errors the SDK builds itself in a transport wrapper (99).
 
 ## Acceptance criteria
 
