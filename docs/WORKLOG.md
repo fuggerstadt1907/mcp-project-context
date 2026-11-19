@@ -14,7 +14,7 @@ itself" are not counted.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 12 of 13 (stretch ticket 11 open) |
-| Total time | 9,6 h |
+| Total time | 9,8 h |
 | Questions the agent asked before coding | 61 |
 | Agent mistakes caught in review | 75 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
@@ -734,7 +734,7 @@ itself" are not counted.
 
 ### Release v0.1.1 (2026-11-19)
 
-- Time: TODO
+- Time: 10 min (preparation; tag and release run not included)
 - Skills used: none
 - Change: version 0.1.1, CHANGELOG entry (demo `.mcp.json` fix, README for teams, perf test
   median, Trusted Publishing). The README pins `@0.1.1` in the team `.mcp.json` and shows the

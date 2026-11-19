@@ -182,7 +182,7 @@ The numbers, from [`docs/WORKLOG.md`](docs/WORKLOG.md):
 
 | | |
 | --- | --- |
-| Time, from requirements to release | 9.6 h |
+| Time, from requirements to release | 9.8 h |
 | Tickets | 12, each one pull request |
 | Questions the agent asked before writing code | 61 |
 | Mistakes caught in review before merging | 75 |
