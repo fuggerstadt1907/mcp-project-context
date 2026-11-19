@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { TicketSource } from '../sources/tickets.js';
+import { strictInput } from './input.js';
 import { fail, ok, withAudit } from './result.js';
 import { reasonText } from './text.js';
 
@@ -28,7 +29,7 @@ export function registerGetTicket(
         'flag). Use it before implementing a ticket and to cite its acceptance criteria. ' +
         'Accepts an id like "T-003", case-insensitive. Call list_tickets first if you do not ' +
         'know the id.',
-      inputSchema: z.object({
+      inputSchema: strictInput({
         id: z.string().describe('Ticket id from the frontmatter, e.g. "T-003".'),
       }),
       outputSchema: TicketSchema,

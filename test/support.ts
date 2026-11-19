@@ -7,6 +7,7 @@ import { type CallToolResult, InMemoryTransport } from '@modelcontextprotocol/se
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import type { Config } from '../src/config.js';
 import { createServer } from '../src/server.js';
+import { redactErrors } from '../src/transport.js';
 
 export const DEMO = realpathSync(join(import.meta.dirname, '../examples/demo-project'));
 
@@ -65,7 +66,7 @@ export async function connect(root: string, overrides: Partial<Config> = {}): Pr
     ...overrides,
   };
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await createServer(config).connect(serverTransport);
+  await createServer(config).connect(redactErrors(serverTransport));
   const client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientTransport);
   return client;

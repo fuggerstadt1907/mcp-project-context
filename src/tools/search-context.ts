@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { queryTerms, SEARCH_KINDS, type Search, type SearchKind } from '../search.js';
+import { strictInput } from './input.js';
 import { fail, ok, withAudit } from './result.js';
 import { skippedLine } from './text.js';
 
@@ -24,7 +25,7 @@ export function registerSearchContext(server: McpServer, search: Search): void {
         'e.g. query "authentication". Every word counts, case-insensitive; title matches rank ' +
         'higher. Returns kind, id, title, score and a short snippet; read the full document ' +
         'with get_adr, get_ticket or get_conventions.',
-      inputSchema: z.object({
+      inputSchema: strictInput({
         query: z.string().max(500).describe('Words to look for, e.g. "rate limit".'),
         kinds: z
           .array(z.enum(SEARCH_KINDS))

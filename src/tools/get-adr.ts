@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { AdrSource } from '../sources/adr.js';
+import { strictInput } from './input.js';
 import { fail, ok, withAudit } from './result.js';
 import { reasonText } from './text.js';
 
@@ -28,7 +29,7 @@ export function registerGetAdr(
         'Read one architecture decision record by id, split into context, decision and ' +
         'consequences. Use it to cite what was decided and why. Accepts "2" or "0002". ' +
         'Call list_adrs first if you do not know the id.',
-      inputSchema: z.object({
+      inputSchema: strictInput({
         id: z.string().describe('ADR number, e.g. "0002" or "2".'),
       }),
       outputSchema: AdrSchema,

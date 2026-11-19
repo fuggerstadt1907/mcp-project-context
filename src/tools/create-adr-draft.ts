@@ -5,6 +5,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { type SafeFs, SafeFsError } from '../fs/safe-fs.js';
 import { redact } from '../redact.js';
+import { strictInput } from './input.js';
 import { fail, ok, withAudit } from './result.js';
 
 const MAX_TITLE = 200;
@@ -62,7 +63,7 @@ export function registerCreateAdrDraft(server: McpServer, safeFs: SafeFs, adrDir
         'returned by list_adrs or get_adr until a human moves them into the ADR directory. ' +
         'Example: title "Use Postgres for bookings".',
       // Strict: an extra field like `status: "Accepted"` is an error, not silently dropped.
-      inputSchema: z.strictObject({
+      inputSchema: strictInput({
         title: z.string().describe('One line, e.g. "Use Postgres for bookings".'),
         context: z.string().describe('Why a decision is needed: the forces and constraints.'),
         decision: z.string().describe('What is decided.'),

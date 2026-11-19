@@ -7,11 +7,11 @@ Be honest: mistakes caught in review are the most valuable part.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 9 / 11 |
-| Total time | 7,75 h |
-| Questions the agent asked before coding | 59 |
-| Agent mistakes caught in review | 45 |
-| Test coverage (src) | – |
+| Tickets done | 10 / 11 |
+| Total time | 8,25 h |
+| Questions the agent asked before coding | 62 |
+| Agent mistakes caught in review | 50 |
+| Test coverage (src) | 94.8 % statements, 91.2 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
 
 ## Template
 
@@ -495,6 +495,81 @@ Be honest: mistakes caught in review are the most valuable part.
   ran without asking, so the confirmation comes from the client, not the server.
   Screenshot: docs/assets/write-permissions.png
 - PR: #21
+
+### Ticket 09 – Integration tests and stdio smoke test (2026-11-18)
+
+- Time: 30 min
+- Skills used: implement-ticket
+- Questions the agent asked before coding: 3, in one round, plus a confirmation of the plan:
+  - Coverage is enforced as an 85 % threshold in CI through `pnpm test:coverage`, not in
+    `pnpm check` (decision 95).
+  - The stdio test builds `dist/` itself, because CI builds only after the tests (decision 96).
+  - Decision 57 (no audit line for calls the SDK rejects early) stays and is pinned by a test
+    (decision 97).
+- Additions by the user when confirming the plan: strict input for the read-only tools, the
+  open follow-up from ticket 08, as its own first commit; tools/list and a tools/call in the
+  stdio test besides initialize (decisions 94, 96).
+- Question after the review: strict schemas made the SDK echo unknown key names unredacted. The
+  user chose to redact them in a shared `strictInput()` helper (decision 94).
+- Decisions made (and where recorded):
+  - Decisions 94–98 in `docs/requirements.md`. 98 (shape of the leak test) was taken by the agent
+    under rule 7.
+- Mistakes caught in review (fresh subagent):
+  - The GitHub token in the leak test's secret list had 26 zeros instead of 23, so the check for
+    the full token could never match. Only the partial `FAKEdemoToken` would have caught a leak.
+    Fixed, and a sanity test now checks that every listed secret is really in the fixtures.
+  - With `z.strictObject`, the SDK's message `Unrecognized key: "…"` echoed the key name without
+    `redact()`. A secret used as a key came back in clear. Now `strictInput()` redacts the names.
+  - The stdio test ran the build with `stdio: 'ignore'`, so a broken build showed only "Command
+    failed". The output is now piped into the error.
+  - The stdio test paced requests by counting all stdout lines. A server notification would have
+    stalled it until the kill timer, with an unclear failure. It now counts responses only and
+    reports a timeout by name.
+  - `@vitest/coverage-v8` was pinned exactly while vitest uses `^`; a vitest bump would have
+    mismatched them. Now `^5.1.0`.
+- Gaps found by the user's own criteria for the stage, checked before the PR:
+  - The user asked whether the whole SDK validation message goes through `redact()`, and for leak
+    cases with a fake secret as unknown key, invalid enum value and wrong-typed value. A probe
+    showed that zod messages do not quote values. It also showed three leaks outside validation:
+    an unknown tool name (`Tool ghp_… not found`), `adr://<secret>` (our own
+    `ResourceNotFoundError`) and an unknown scheme (`Resource not found: x://ghp_…`). The SDK
+    answers these before `withAudit` runs. A transport wrapper now redacts every error response
+    and every `isError` result before it is sent (decision 99). Nine leak cases cover it in the
+    e2e test, and a fourth stdio request checks the wiring in the CLI.
+- Lesson: negative tests ("secret never appears") need a positive check that the secret is
+  really in the input. The GitHub token in the list was wrong, and the leak test could never fail.
+- Agent checks: each new test was broken on purpose once and failed as expected. Redaction of
+  `structuredContent` off, redaction of resource text off, an id in the audit line, a stray
+  stdout write in `cli.ts`, a plain-text stderr line, a wrong secret in the list, a tool without
+  `strictInput`, a coverage threshold of 99 % (exit code 1), and the CLI and the test helper
+  without the transport wrapper.
+- Coverage: 94.8 % statements, 91.2 % branches, 95.2 % functions, 95.9 % lines for `src`.
+  `src/fs` 92.2 / 88.4 / 89.2 / 95.0, `src/redact.ts` 98.2 / 90.9 / 100 / 100, `src/tools`
+  99.6 / 94.8 / 100 / 99.5 (statements / branches / functions / lines). `src/cli.ts` shows 0 %
+  because it runs only in spawned processes.
+- e2e result: the session against the demo project finds ADR 0002 first for "authentication",
+  reads ADR 0002 and T-003 (four open criteria), lists 8 resources and reads `adr://0002`. No
+  fixture secret appears in any tool result, resource, error or stderr line.
+- Tested: 27 new vitest tests (1087 → 1114, including the perf test), in `test/e2e.test.ts`,
+  `test/stdio.test.ts`, `test/strict-input.test.ts` and `test/architecture.test.ts`. They cover:
+  - The e2e session (tools, search, ADR, ticket, resource list and read).
+  - The leak test over every tool, ADR, ticket, resource and five error paths, plus stderr
+    (AC22, AC29).
+  - AC26 end to end: exactly two audit lines with the full key set, no id or content.
+  - Decision 57 pinned: no audit line and no echoed value for invalid input, an unknown tool and
+    an unknown resource scheme.
+  - AC25 over the built CLI: three JSON-RPC results and one redacted error for a secret as tool
+    name on stdout, only JSON lines on stderr, exit 0.
+  - A fake secret sent by the agent as unknown key, invalid enum value, status filter,
+    wrong-typed value, key of a wrong-typed value, unknown id, unknown tool name, unknown
+    resource id and unknown resource scheme never comes back and never reaches stderr.
+  - Unknown fields in all seven tools, several at once, a secret as key name, and calls without
+    arguments.
+- Not tested:
+  - Coverage of `src/cli.ts`; it runs only in the spawned process.
+  - The stdio test without `pnpm` on PATH (follow-up in the open points).
+  - The CI run itself; it runs with the PR.
+- PR: #22
 
 ## Skill improvements
 

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { CONVENTION_FILES, type ConventionSource } from '../sources/conventions.js';
+import { strictInput } from './input.js';
 import { ok, withAudit } from './result.js';
 import { skippedLine } from './text.js';
 
@@ -16,7 +17,7 @@ export function registerGetConventions(server: McpServer, conventions: Conventio
         "Read the project's rules for contributors and coding agents: CONVENTIONS.md, " +
         'CONTRIBUTING.md, CLAUDE.md and AGENTS.md from the project root, in that order. Files ' +
         'that do not exist are left out. Use it before writing code or opening a PR.',
-      inputSchema: z.object({}),
+      inputSchema: strictInput({}),
       outputSchema: z.object({ files: z.array(ConventionFileSchema) }),
       annotations: { readOnlyHint: true },
     },

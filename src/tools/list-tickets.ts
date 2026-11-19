@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { TicketSource } from '../sources/tickets.js';
+import { strictInput } from './input.js';
 import { ok, withAudit } from './result.js';
 import { skippedLine } from './text.js';
 
@@ -26,7 +27,7 @@ export function registerListTickets(
         'to find the ticket you work on before reading it with get_ticket (e.g. id "T-003"). ' +
         'Optional status and label filters, case-insensitive and exact, combined with AND, ' +
         'e.g. status "todo" and label "api".',
-      inputSchema: z.object({
+      inputSchema: strictInput({
         status: z.string().optional().describe('Only tickets with this status, e.g. "todo".'),
         label: z.string().optional().describe('Only tickets with this label, e.g. "api".'),
       }),

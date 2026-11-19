@@ -1,8 +1,9 @@
 import { parseArgs } from 'node:util';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio';
 import { loadConfig } from './config.js';
 import { log } from './log.js';
 import { createServer } from './server.js';
+import { redactErrors } from './transport.js';
 import { VERSION } from './version.js';
 
 const EXIT_INVALID_CONFIG = 2;
@@ -58,6 +59,7 @@ function main(argv: string[]): void {
   for (const warning of result.warnings) log.warn(warning);
   const { config } = result;
   serveStdio(() => createServer(config), {
+    transport: redactErrors(new StdioServerTransport()),
     onerror: (error) => log.error('transport error', { error: error.message }),
   });
   log.info('server started', {
