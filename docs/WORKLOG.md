@@ -683,7 +683,10 @@ itself" are not counted.
   environment `npm`, `npm publish` allowed) and added the required reviewer to the `npm`
   environment.
   - [x] `NPM_TOKEN` deleted from the `npm` environment and the token revoked on npmjs.com.
-  - [ ] First release through OIDC (v0.1.1), then "disallow bypass 2fa tokens" on npmjs.com.
+  - [x] First release through OIDC (v0.1.1), then "disallow bypass 2fa tokens" on npmjs.com.
+    The user had set "disallow bypass 2fa tokens" before the release, so the run published
+    `mcp-project-context@0.1.1` through OIDC under that setting, without a token and with
+    provenance. The registry showed it about three minutes after the run.
 - PR: #25
 
 ### Ticket 12 – Stable performance test (2026-11-19)
