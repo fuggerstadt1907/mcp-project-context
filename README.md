@@ -41,6 +41,20 @@ claude mcp add project-context -- npx -y mcp-project-context --root .
 
 Requires Node 22 or later. Writing stays off until you add `--allow-write` yourself.
 
+For a team, check a `.mcp.json` into the repository and pin the version, so everyone runs the same
+server and an update is a reviewed change:
+
+```json
+{
+  "mcpServers": {
+    "project-context": {
+      "command": "npx",
+      "args": ["-y", "mcp-project-context@0.1.0", "--root", "."]
+    }
+  }
+}
+```
+
 ## Demo
 
 Three commands start Claude Code on the bundled demo project, a fictional booking app with four
@@ -52,7 +66,9 @@ cd mcp-project-context/examples/demo-project
 claude
 ```
 
-The demo project ships a `.mcp.json`, so Claude Code offers to enable the server on start. In the
+The demo project ships a `.mcp.json`, so Claude Code offers to enable the server on start. It asks
+for `mcp-project-context@latest`, because inside this repository a bare `mcp-project-context`
+resolves to the repository's own, unbuilt package. In the
 recording below, the agent answers _"Which accepted ADRs exist, and why do we use magic links?"_
 with `list_adrs`, `search_context` and `get_adr`. Then _"What are our conventions?"_ calls
 `get_conventions`, and the raw tool output (Ctrl+O) shows the fake secrets in the demo
