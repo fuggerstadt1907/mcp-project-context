@@ -14,7 +14,7 @@ itself" are not counted.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 11 of 12 (stretch ticket 11 open) |
-| Total time | 8,75 h |
+| Total time | 9,1 h |
 | Questions the agent asked before coding | 60 |
 | Agent mistakes caught in review | 70 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
@@ -650,7 +650,7 @@ itself" are not counted.
 
 ### Release v0.1.0 and fresh-clone test (2026-11-19)
 
-- Time: TODO
+- Time: 20 min (release run and re-run, fix of the demo `.mcp.json`, PR)
 - Skills used: none (release by the user, follow-up with the agent)
 - Release: the user tagged `v0.1.0` on `main`. `release.yml` published
   `mcp-project-context@0.1.0` to npm with provenance; the user verified the provenance, and the
