@@ -14,7 +14,7 @@ itself" are not counted.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 12 of 13 (stretch ticket 11 open) |
-| Total time | 9,1 h |
+| Total time | 9,6 h |
 | Questions the agent asked before coding | 61 |
 | Agent mistakes caught in review | 75 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
@@ -688,7 +688,7 @@ itself" are not counted.
 
 ### Ticket 12 – Stable performance test (2026-11-19)
 
-- Time: TODO
+- Time: 30 min
 - Skills used: none (ticket written and implemented in the release session)
 - Questions the agent asked before coding: 1, plus a confirmation of the plan:
   - Five calls on one server or the first call of five fresh servers. The user chose fresh
@@ -720,6 +720,16 @@ itself" are not counted.
   - Ticket AC3 (a slow search fails in CI) has no regression test. It was checked once by hand
     with an injected delay.
   - The CI run of this exact test before the PR; it runs with the PR.
+- Wrong assumption caught in review: the agent asked whether to measure
+  "5 fresh servers, first call each" to keep the cold first call (decision 85).
+  The user agreed. The review showed that a new server object in the same
+  process is not cold: from run 2 on, JIT and file cache are warm, so the
+  median measures warm calls. Kept the code, fixed the docs to say what is
+  really measured. The truly cold start is covered by the stdio test
+  (ticket 09), which spawns dist/cli.js as a real process.
+  Lesson: a question offered as "(Recommended)" can carry a wrong premise;
+  the user's approval does not make it true. The fresh review is what
+  catches it.
 - PR: #27
 
 ## Skill improvements
@@ -740,3 +750,8 @@ itself" are not counted.
   Consider moving this rule into the skill itself.
 - Never use `git add -A`; stage explicit paths. In ticket 03 it swept the user's uncommitted
   WORKLOG note into a feature commit.
+
+### 2026-11-19 · implement ticket, perf test (ticket 12)
+- implement-ticket: when a question rests on a technical claim ("fresh
+  server = cold call"), state how the claim was verified, or mark it as an
+  assumption, before asking the user to choose.
