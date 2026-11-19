@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio';
 import { loadConfig } from './config.js';

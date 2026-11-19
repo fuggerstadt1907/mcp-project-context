@@ -1,8 +1,10 @@
 // Smoke test of the built CLI over real stdio (AC25, NFR-5): stdout carries only protocol
 // messages, stderr only JSON log lines.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/server';
 import { beforeAll, describe, expect, it } from 'vitest';
+import pkg from '../package.json' with { type: 'json' };
 
 const DEMO = 'examples/demo-project';
 
@@ -127,4 +129,13 @@ describe('built CLI over stdio', () => {
     );
     expect(code).toBe(0);
   }, 20_000);
+
+  // npx and a global install run the bin file directly, so it needs a shebang (NFR-9).
+  it('runs as an executable without node in front', () => {
+    expect(readFileSync('dist/cli.js', 'utf8').split('\n', 1)[0]).toBe('#!/usr/bin/env node');
+    const result = spawnSync('dist/cli.js', ['--version'], { encoding: 'utf8' });
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toBe(`${pkg.version}\n`);
+    expect(result.status).toBe(0);
+  });
 });

@@ -1,10 +1,18 @@
 {
   "name": "mcp-project-context",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MCP server that gives coding agents safe, read-only access to a repo's ADRs, tickets and conventions, with secret and PII redaction.",
   "type": "module",
   "license": "MIT",
   "author": "Alessandro Orlandi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuggerstadt1907/mcp-project-context.git"
+  },
+  "homepage": "https://github.com/fuggerstadt1907/mcp-project-context#readme",
+  "bugs": {
+    "url": "https://github.com/fuggerstadt1907/mcp-project-context/issues"
+  },
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -16,7 +24,8 @@
     "mcp-project-context": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
@@ -32,7 +41,9 @@
     "test:perf": "vitest run test/perf.test.ts",
     "test:coverage": "vitest run --coverage --exclude test/perf.test.ts && pnpm test:perf",
     "test:watch": "vitest",
-    "check": "pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "check:pack": "tsx scripts/check-pack.ts",
+    "prepublishOnly": "pnpm build && pnpm check:pack"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
