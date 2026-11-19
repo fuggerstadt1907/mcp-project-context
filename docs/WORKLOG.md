@@ -632,7 +632,10 @@ itself" are not counted.
   loaded the machine (load average 16–36). Once that suite finished it passed three times out of
   three. Noted under open points.
 - Coverage: 94.9 % statements, 91.4 % branches, 95.3 % functions, 96.0 % lines for `src`.
-- Demo result: TODO, after the recording (decision 102).
+- Demo result: the user recorded Claude Code in the demo project with the local build (decision
+  102). Asked to implement T-003 after checking the relevant ADR, the agent called `list_adrs`,
+  `search_context` and `get_adr` before writing code. The 77 s recording is
+  `docs/assets/demo.gif` (10 fps, 1200 px wide, 4.3 MB).
 - Tested: 10 new vitest tests (1114 → 1124, including the perf test): `test/check-pack.test.ts`
   (accepted tarball, extra files under `dist/`, six rejected paths including `distx/` and a
   missing bundle) and a stdio test that runs `dist/cli.js` without `node`.

@@ -53,10 +53,10 @@ claude
 ```
 
 The demo project ships a `.mcp.json`, so Claude Code offers to enable the server on start. Then ask:
-_"Implement ticket T-003, check the relevant ADR first."_ The agent reads the ticket and its four
-acceptance criteria, searches for the authentication ADR and reads ADR 0002 before writing code.
+_"Implement ticket T-003, check the relevant ADR first."_ Before writing code, the agent lists
+the ADRs, searches for the authentication decision and reads ADR 0002.
 
-![Claude Code calling get_ticket, search_context and get_adr on the demo project](docs/assets/demo.gif)
+![Claude Code calling list_adrs, search_context and get_adr on the demo project](docs/assets/demo.gif)
 
 Some fixtures in the demo project hold fake secrets and contact details. Ask the agent for ticket
 T-002 or the conventions to see them come back as `[REDACTED:<type>]`.
