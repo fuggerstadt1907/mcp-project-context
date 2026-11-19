@@ -646,7 +646,7 @@ itself" are not counted.
   - `npx mcp-project-context` against the published package (AC28) and the three demo commands in
     a fresh clone; both need the npm release.
   - GitHub description, topics and social preview; after the merge.
-- PR: #
+- PR: #23
 
 ## Skill improvements
 
