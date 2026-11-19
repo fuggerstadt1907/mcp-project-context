@@ -3,15 +3,21 @@
 One entry per ticket. This log is the evidence for "How this was built" in the README.
 Be honest: mistakes caught in review are the most valuable part.
 
+Counting rule for the Summary: "Questions the agent asked before coding" takes the number an entry
+states, or counts the listed questions, and leaves out confirmations of the plan. "Agent mistakes
+caught in review" counts every item under "Mistakes caught in review", every item under "Gaps
+found by the user's own criteria" and the invariant test of ticket 07. "Mistakes the agent caught
+itself" are not counted.
+
 ## Summary
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 10 / 11 |
-| Total time | 8,25 h |
-| Questions the agent asked before coding | 62 |
-| Agent mistakes caught in review | 50 |
-| Test coverage (src) | 94.8 % statements, 91.2 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
+| Tickets done | 11 of 12 (stretch ticket 11 open) |
+| Total time | 8,75 h |
+| Questions the agent asked before coding | 60 |
+| Agent mistakes caught in review | 69 |
+| Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
 
 ## Template
 
@@ -396,6 +402,11 @@ Be honest: mistakes caught in review are the most valuable part.
     `password = "hunter2 AKIA…"` showed `hunter2` in every tool. This bug came from ticket 03. Now
     merged (decision 81). After this fix the line-break tests also pass against one-line snippets;
     both layers protect on their own.
+  - The performance test failed in 2 of 6 full runs (322 and 384 ms) because it shared the CPU with
+    other test workers. It now runs on its own (decision 85).
+  - The ticket search body contained `Labels:` and `- [x]`, so `labels` or `x` matched every
+    ticket. Now only the values are searched.
+  - A snippet edge without whitespace nearby could split a surrogate pair. Fixed.
 - Invariant test asked for by the user before the PR (decision 86): every character a single
   pattern masks must be masked in the combined output, for all pairs of the 11 types side by side,
   inside each other's values and nested. It failed in 120 of 595 cases. Most were the email
@@ -403,11 +414,6 @@ Be honest: mistakes caught in review are the most valuable part.
   it, so the host stays visible. The rest were real leaks: a dropped match left `bob:`, `+49 170` or
   IBAN groups visible. All overlaps are now merged, not only `assignment`, folded into the same fix
   commit.
-  - The performance test failed in 2 of 6 full runs (322 and 384 ms) because it shared the CPU with
-    other test workers. It now runs on its own (decision 85).
-  - The ticket search body contained `Labels:` and `- [x]`, so `labels` or `x` matched every
-    ticket. Now only the values are searched.
-  - A snippet edge without whitespace nearby could split a surrogate pair. Fixed.
 - Mistake the agent caught itself: the first exhaustive edge test had too little filler, so no
   window edge ever fell inside the secret. Turning the widening off showed it; the filler was made
   longer until every case went red without the widening.
@@ -570,6 +576,77 @@ Be honest: mistakes caught in review are the most valuable part.
   - The stdio test without `pnpm` on PATH (follow-up in the open points).
   - The CI run itself; it runs with the PR.
 - PR: #22
+
+### Ticket 10 – README, demo, release (2026-11-19)
+
+- Time: 30 min
+- Skills used: implement-ticket
+- Questions the agent asked before coding: 4, in two rounds, plus a confirmation of the plan:
+  - Three demo commands: a `.mcp.json` in the demo project, so `git clone`, `cd`, `claude` is
+    enough (decision 100).
+  - Who records the demo: the user, as a GIF (decision 102).
+  - The review count of 50 could not be reproduced: recount with a written rule (decision 103).
+  - The GIF was due before the merge, the package only after it: record from the local build
+    (decision 102). This contradiction between two answers came up after the first round.
+- Change by the user when confirming the plan: publish from CI with provenance on a tag, with an
+  `NPM_TOKEN` secret if Trusted Publishing cannot be used yet, and a tarball allow-list check. The
+  user sets the tag (decision 101). Trusted Publishing needs an existing package, so the first
+  publish uses the token.
+- Additions by the user before the PR: the release job runs in a GitHub environment `npm` with
+  the user as required reviewer, `NPM_TOKEN` as its secret (decision 101); the demo GIF is
+  converted from the user's screen recording.
+- Decisions made (and where recorded):
+  - Decisions 100–104 in `docs/requirements.md`. 104 (shebang in the source, `npx -y`,
+    `prepublishOnly`) was taken by the agent under rule 7.
+- Mistakes caught in review (fresh subagent):
+  - The question count in the Summary and README could not be reproduced with the rule the agent
+    had just written.
+  - The review count claimed "52 by the review step", but three of the items came from the user in
+    the requirements session.
+  - The README still gave the test count of ticket 09.
+  - The README said the ADR date falls back to the `## Status` section. It falls back to a `Date:`
+    line; bullets and that line count only before the first section.
+  - The CHANGELOG said no file outside root is readable and non-markdown files are refused. Hard
+    links and the symlink race are documented gaps, and the allow-list also has `.txt`, `.yaml`,
+    `.yml`, `.json` and `.mdx`.
+  - README and CHANGELOG promised an audit line for every call. Calls the SDK rejects before the
+    handler get none (decisions 57, 97).
+  - The README named only two of the exit code 2 cases.
+  - The frontmatter section left out the likeliest mistake: `title: Fix: login` skips the ticket
+    unless quoted. Duplicate keys were not mentioned either.
+  - The README said an off-template ADR takes its title from "the first heading". It is the first
+    `#` heading, else the file name.
+  - Decision 104 justified `npx -y` with a prompt on stdin. npx assumes yes when stdin is not a
+    terminal; the reason was corrected.
+  - The steps after the merge (secret, tag, release, metadata, AC28) were not written down
+    anywhere. The ticket now has a checklist.
+  - `release.yml` reacted to every `v*` tag, so a pre-release tag would have been published as
+    `latest`, and a tag on a branch commit would have published unreviewed code. Now only `vX.Y.Z`
+    on a commit in `main`.
+  - `check-pack.ts` threw at import when `argv[1]` was not a file path.
+- Agent checks: the shebang test failed before the shebang was added. The pack check failed while
+  `CHANGELOG.md` was missing. The package was packed and started through
+  `npx --package=<tarball> mcp-project-context`: `--version` printed 0.1.0, initialize was answered
+  and stdout held only JSON-RPC.
+- Perf test: AC27 failed three times in a row (551–2000 ms) while another project's vitest suite
+  loaded the machine (load average 16–36). Once that suite finished it passed three times out of
+  three. Noted under open points.
+- Coverage: 94.9 % statements, 91.4 % branches, 95.3 % functions, 96.0 % lines for `src`.
+- Demo result: the user recorded Claude Code in the demo project with the local build (decision
+  102). Asked "Which accepted ADRs exist, and why do we use magic links?", the agent called
+  `list_adrs`, `search_context` and `get_adr`. Asked "What are our conventions?", it called
+  `get_conventions`. The raw tool output, opened with Ctrl+O, shows the secrets as
+  `[REDACTED:…]`. No implementation and no T-003 in the recording. The 77 s recording is
+  `docs/assets/demo.gif` (10 fps, 1200 px wide, 4.3 MB).
+- Tested: 10 new vitest tests (1114 → 1124, including the perf test): `test/check-pack.test.ts`
+  (accepted tarball, extra files under `dist/`, six rejected paths including `distx/` and a
+  missing bundle) and a stdio test that runs `dist/cli.js` without `node`.
+- Not tested:
+  - `release.yml` itself; it runs only on a tag. The tag/version check was tried locally.
+  - `npx mcp-project-context` against the published package (AC28) and the three demo commands in
+    a fresh clone; both need the npm release.
+  - GitHub description, topics and social preview; after the merge.
+- PR: #23
 
 ## Skill improvements
 

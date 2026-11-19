@@ -1,6 +1,6 @@
 # Requirements: mcp-project-context
 
-> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-18
+> Status: ready · Ticket: docs/requirements.md (v0.1 draft) · Stand: 2026-11-19
 
 Version 0.2 · Owner: Alessandro Orlandi
 
@@ -233,13 +233,14 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 07 Conventions and search | FR-6, FR-7, NFR-7 | done · 2026-11-17 · ticket-07-conventions-search |
 | 08 Write tool | FR-9, NFR-4 | done · 2026-11-17 · ticket-08-write-tool |
 | 09 Integration tests | Goal, AC25, AC29 | done · 2026-11-18 · ticket-09-integration-tests |
-| 10 README, demo, release | NFR-9, Goal (demo) | open |
+| 10 README, demo, release | NFR-9, Goal (demo) | done · 2026-11-19 · ticket-10-readme-release |
 | 11 Stretch: GitHub Issues | Out of v0.1 scope | open |
 
 ## Rollout & release
 
-- Tag `v0.1.0`, publish a GitHub release with a changelog, and publish to npm.
-- Users add the server with `claude mcp add project-context -- npx mcp-project-context --root .`.
+- Tag `v0.1.0`, publish a GitHub release with a changelog, and publish to npm. The tag starts
+  `.github/workflows/release.yml`, which publishes with provenance (decision 101).
+- Users add the server with `claude mcp add project-context -- npx -y mcp-project-context --root .`.
   Writing stays off until they add `--allow-write` themselves.
 - No migration; there is no stored state.
 
@@ -366,31 +367,23 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 97 | Decision 57 after ticket 09 | Kept. `test/e2e.test.ts` pins it: invalid input, an unknown tool and an unknown resource scheme write no audit line and do not echo input values. Decided by the user. | An SDK update that changes it shows up in the test. Unknown key names are now redacted (decision 94). |
 | 98 | Shape of the leak test | One constant with the four demo secrets, joined from parts (decision 43), plus distinctive parts of each. A sanity test checks that each secret is really in the fixtures. The session calls every tool for every ADR and ticket, six searches, every resource from resources/list and five error paths. It asserts that no secret is in any result, error or stderr line, and that all four masks appear. Decided by the agent under rule 7; the sanity test came from the review. | The masks show that the secret-bearing files were returned, so the test cannot pass empty. A wrong token length in the list was found in review. |
 | 99 | Errors the SDK builds itself | `src/transport.ts` wraps the server transport (`redactErrors`). Before `send`, it redacts every JSON-RPC error response and the `content` of every `isError` result. The CLI passes the wrapped `StdioServerTransport` to `serveStdio`, and the test helper wraps `InMemoryTransport`. Results built by `ok()` pass unchanged, and `fail()` results are redacted a second time, which changes nothing. Still no audit line for these calls (decision 97). Asked for by the user before the PR. | An unknown tool name, an unknown resource URI (also our own `ResourceNotFoundError`) and an unknown scheme came back unredacted. The SDK answers them before `withAudit` runs. `Transport` is a public interface, so this does not touch SDK internals (decision 57). |
+| 100 | Three commands for the demo | `examples/demo-project/.mcp.json` starts `npx -y mcp-project-context --root .`. The README shows `git clone`, `cd mcp-project-context/examples/demo-project`, `claude`; Claude Code asks once to enable the server. Decided by the user. | A stranger needs no `claude mcp add` step, and the demo uses the published package the way a user would. |
+| 101 | How v0.1.0 is published | From CI, not locally: `.github/workflows/release.yml` runs on a `v*` tag, checks that the tag matches `package.json`, runs `pnpm check`, `pnpm build` and `pnpm check:pack`, then `npm publish --provenance --access public` with `id-token: write`. Only tags of the form `vX.Y.Z` on a commit in `main` publish; pre-release tags would otherwise become `latest` (found in review). The first publish uses an `NPM_TOKEN` secret, because npm Trusted Publishing can only be set up for a package that already exists. `scripts/check-pack.ts` fails if the tarball holds anything besides `dist/`, `README.md`, `LICENSE`, `package.json` and `CHANGELOG.md`, or misses one of them; CI runs it too. The user sets the tag after reviewing the README and the dry-run output. The job runs in the GitHub environment `npm` with the user as required reviewer, and `NPM_TOKEN` is a secret of that environment, so a pushed tag publishes only after approval (asked for by the user before the PR). Decided by the user. | Provenance ties the package to the commit and workflow that built it. The tarball check keeps sources, fixtures and docs with fake secrets out of the package. |
+| 102 | Demo recording | The user records `docs/assets/demo.gif` before the merge, with the server from the local build (`claude mcp add project-context -- node <repo>/dist/cli.js --root .` in the demo project). Decided by the user. | The package is published only after the merge, and the published README should already show the GIF. The tool calls look the same as with the published package. |
+| 103 | Numbers in "How this was built" | Recounted with a rule now written into `docs/WORKLOG.md`: every item under "Mistakes caught in review" and under the user's own checks before the PR counts; mistakes the agent caught itself do not. After ticket 09 that gives 56 instead of 50. Recount asked for by the user, rule by the agent. | The old figure could not be reproduced from the entries. |
+| 104 | Release details | The shebang sits in `src/cli.ts`; esbuild keeps it and tsup marks `dist/cli.js` executable, so no tsup `banner` is needed. The stdio test runs `dist/cli.js` directly. README and rollout use `npx -y`, so the install never depends on npx detecting that stdin is not a terminal (stdin carries the protocol); the reason given first was wrong and was corrected in review. `prepublishOnly` runs `pnpm build` and `pnpm check:pack`, so a local `npm publish` cannot ship a stale or bloated tarball. `CHANGELOG.md` is part of the package. Decided by the agent under rule 7. | One place for the shebang, and a test that executes it. |
 
 ## Open points
 
-- Ticket 10: README Limitations must name hard links and the check/open symlink race (decisions 34, 35).
 - Follow-up (safe-fs): `listFiles` skips directory entries whose type the file system does not report
   (`DT_UNKNOWN` on some network/FUSE mounts). Fall back to `lstat` if that ever matters.
 - Follow-up (safe-fs): `--root` given in a different letter case than on disk keeps that spelling, so
   absolute symlinks inside root may be rejected as `outside_root`. Fails closed; `realpathSync.native`
   for root would fix it.
-- Ticket 10: README Limitations must name what redaction does not catch: `sk_live_…` and `ASIA…`
-  keys, `Bearer`/`Basic` credentials without a digit, a user name alone in a URL
-  (`https://token@host` is masked as an email instead), and phone formats with parentheses or
-  without separators (`(0821) 123456`, `01701234567`). Also the false positives kept on purpose
-  (decision 46).
 - Follow-up (ADR parser): an unclosed code fence hides every later section, which the warning then
   reports as missing. This is CommonMark behaviour; kept.
-- Ticket 10: README documents the frontmatter subset, the allowed ticket id characters
-  (decision 69) and that `README.md` files under `--tickets-dir` are ignored.
-- Ticket 10: README documents the supported ADR formats (bullet, Nygard, MADR 3) with the source
-  order and the `X by …` cut (decisions 73–79), and that a leading `---` thematic break is read as
-  frontmatter.
 - v0.2 idea (ADR parser): expose the links of the Status section (`Superseded by` / `Amended by`
   targets) as a `links` field. Found in a real-world check against the adr-tools repository.
-- Ticket 10: README Limitations must say that the targets of `Superseded by` / `Amended by` are
-  not returned; the status is cut to `Superseded` (decision 74) and only `adr://` shows the link.
 - Follow-up (ADR parser): the first non-empty line of a `## Status` section is taken as written, so
   `### Accepted` or a code fence there becomes the status. adr-tools never writes that. Strip
   heading markers if a real ADR needs it.
@@ -400,11 +393,6 @@ Each ticket is testable on its own with `InMemoryTransport`.
   `redact()` mask `(score N)` in the text line. Over-masking only; the structured result is fine.
 - Follow-up (search): a snippet has no upper length. A private key without an END line pulls in the
   rest of the file. It is redacted to one `[REDACTED:private_key]`, so nothing leaks.
-- Ticket 10: README Limitations must say that search is plain keyword matching (decision 83) and
-  that snippets keep line breaks.
-- Ticket 10: README Limitations must say that two server processes with `--allow-write` on the
-  same repository can give two drafts the same number (decision 87), and that a failed write can
-  leave an empty `drafts/` directory or, on a full disk, a truncated draft.
 - Follow-up (create_adr_draft): the audit `ms` of a queued call includes the time spent waiting
   for earlier calls (decision 87). Fine for drafts; split it if audit timings are ever analysed.
 - Follow-up (stdio test): it runs `pnpm build`, so `pnpm` must be on PATH. A runner started with
@@ -412,3 +400,11 @@ Each ticket is testable on its own with `InMemoryTransport`.
   second during `pnpm check`; a local MCP client started from `dist/` at that moment fails.
 - Follow-up (CI): the `pnpm build` step after the tests is now redundant (the stdio test builds).
   Kept as an explicit check of the release build.
+- Follow-up (release): after the first publish, set up npm Trusted Publishing for
+  `release.yml` on npmjs.com, then remove `NPM_TOKEN` from the workflow and the `npm` environment
+  secrets. Trusted Publishing needs npm 11.5.1 or later in the workflow.
+- Follow-up (demo): Claude Code started in `examples/demo-project` also loads this repository's
+  `CLAUDE.md` from the parent directory, so the demo agent sees our own workflow rules.
+- Follow-up (perf test): AC27 fails when another process loads the CPU (551 ms while a second
+  vitest suite ran on the same machine). It runs on its own within our suite (decision 85), but
+  not against foreign load. CI runners are not shared within a job.
