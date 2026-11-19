@@ -569,7 +569,7 @@ Be honest: mistakes caught in review are the most valuable part.
   - Coverage of `src/cli.ts`; it runs only in the spawned process.
   - The stdio test without `pnpm` on PATH (follow-up in the open points).
   - The CI run itself; it runs with the PR.
-- PR: #
+- PR: #22
 
 ## Skill improvements
 
