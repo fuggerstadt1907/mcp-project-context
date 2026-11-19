@@ -26,7 +26,7 @@ function redactText(value: string, counter: { count: number }): string {
 
 // Expects JSON data. Keys are redacted too, because a source may build them from content
 // (counts per assignee). The copy is frozen so a handler cannot put raw text back after ok().
-function redactDeep(value: unknown, counter: { count: number }): unknown {
+export function redactDeep(value: unknown, counter: { count: number }): unknown {
   if (typeof value === 'string') return redactText(value, counter);
   if (Array.isArray(value)) return Object.freeze(value.map((item) => redactDeep(item, counter)));
   if (value !== null && typeof value === 'object') {

@@ -25,6 +25,9 @@ const SECRET_PARTS = [
   ['170 ', '0000000'].join(''),
 ];
 
+// A fake token the agent sends itself, as a key, value, tool name or URI.
+const AGENT_SECRET = ['ghp_', 'b'.repeat(36)].join('');
+
 // Masks that prove the files holding the secrets were actually returned.
 const EXPECTED_MASKS = [
   '[REDACTED:email]',
@@ -143,6 +146,27 @@ describe('leak test (AC22, AC29)', () => {
       expect(all).not.toContain(secret);
       expect(stderr()).not.toContain(secret);
     }
+  });
+
+  // The agent's own input can carry a secret. Every error the SDK or the server builds from it
+  // must come back redacted (decision 99).
+  it.each<[string, (client: Client) => Promise<unknown>]>([
+    ['an unknown key', (c) => tool(c, 'get_ticket', { id: 'T-003', [AGENT_SECRET]: 1 })],
+    [
+      'an invalid enum value',
+      (c) => tool(c, 'search_context', { query: 'x', kinds: [AGENT_SECRET] }),
+    ],
+    ['a status filter', (c) => tool(c, 'list_adrs', { status: AGENT_SECRET })],
+    ['a wrong-typed value', (c) => tool(c, 'search_context', { query: 'x', limit: AGENT_SECRET })],
+    ['a key of a wrong-typed value', (c) => tool(c, 'get_adr', { id: { [AGENT_SECRET]: 1 } })],
+    ['an unknown id', (c) => tool(c, 'get_adr', { id: AGENT_SECRET })],
+    ['an unknown tool name', (c) => tool(c, AGENT_SECRET)],
+    ['an unknown resource id', (c) => c.readResource({ uri: `adr://${AGENT_SECRET}` })],
+    ['an unknown resource scheme', (c) => c.readResource({ uri: `x://${AGENT_SECRET}` })],
+  ])('returns no secret the agent sent as %s', async (_, run) => {
+    const answer = await withClient(DEMO, (client) => attempt(() => run(client)));
+    expect(JSON.stringify(answer)).not.toContain(AGENT_SECRET);
+    expect(stderr()).not.toContain(AGENT_SECRET);
   });
 });
 

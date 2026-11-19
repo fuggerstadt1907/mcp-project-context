@@ -12,6 +12,9 @@ beforeAll(() => {
   execFileSync('pnpm', ['build'], { stdio: 'pipe' });
 }, 60_000);
 
+// Joined from parts so secret scanning does not flag this file (decision 43).
+const AGENT_SECRET = ['ghp_', 'b'.repeat(36)].join('');
+
 const REQUESTS = [
   {
     jsonrpc: '2.0',
@@ -31,6 +34,8 @@ const REQUESTS = [
     method: 'tools/call',
     params: { name: 'get_adr', arguments: { id: '2' } },
   },
+  // The SDK quotes an unknown tool name in its error; the CLI must redact it (decision 99).
+  { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: AGENT_SECRET, arguments: {} } },
 ];
 
 interface Session {
@@ -87,7 +92,7 @@ function lines(text: string): string[] {
 }
 
 describe('built CLI over stdio', () => {
-  it('answers initialize, tools/list and tools/call with JSON-RPC only on stdout', async () => {
+  it('answers initialize, tools/list and two tools/call with JSON-RPC only on stdout', async () => {
     const { code, timedOut, stdout, stderr } = await session();
     expect(timedOut, 'the server did not answer every request within 10 s').toBe(false);
 
@@ -97,9 +102,12 @@ describe('built CLI over stdio', () => {
       ['2.0', 1, true],
       ['2.0', 2, true],
       ['2.0', 3, true],
+      ['2.0', 4, false],
     ]);
+    expect(messages[3]?.error).toMatchObject({ message: expect.stringContaining('[REDACTED:') });
+    expect(stdout).not.toContain(AGENT_SECRET);
 
-    const [init, list, call] = messages.map((m) => m.result) as [
+    const [init, list, call] = messages.slice(0, 3).map((m) => m.result) as [
       Record<string, unknown>,
       { tools: { name: string }[] },
       Record<string, unknown>,
