@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.1 (2026-11-19)
+
+The server is unchanged; `dist/cli.js` is built from the same source as 0.1.0.
+
+### Fixed
+
+- The demo project's `.mcp.json` asks for `mcp-project-context@latest`. Inside this repository a
+  bare `mcp-project-context` resolved to the repository's own, unbuilt package, and the server
+  did not start.
+
+### Documentation
+
+- README: a `.mcp.json` with a pinned version for teams, and why the demo uses `@latest`.
+
+### Development
+
+- The performance test (`search_context` on 500 files) takes the median of five calls, with a 1 s
+  limit in CI and 300 ms locally. One slow run on a busy CI machine no longer fails it.
+- Releases are published through npm Trusted Publishing (OIDC) instead of a stored token, still
+  with provenance.
+
 ## 0.1.0 (2026-11-19)
 
 First release.
