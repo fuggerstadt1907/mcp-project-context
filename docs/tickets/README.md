@@ -17,6 +17,7 @@ Work them in order. Each ticket is one PR. Create them as GitHub issues with
 | 09 | [Integration tests and stdio smoke test](09-integration-tests.md) | 07, 08 | S |
 | 10 | [README, demo, release](10-readme-demo-release.md) | 09 | S |
 | 11 | [Stretch: GitHub Issues source](11-stretch-github-issues.md) | 06 | M |
+| 12 | [Stable performance test](12-perf-test-median.md) | 07 | S |
 
 Size: S ≈ 1–2 h, M ≈ 2–4 h with an agent, including review.
 

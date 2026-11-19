@@ -29,8 +29,8 @@ build before the merge (102), the counting rule for the WORKLOG numbers (103), t
 
 ## Acceptance criteria
 
-- [ ] A stranger can run the demo with three commands from the README.
-- [ ] `npx mcp-project-context --root examples/demo-project` starts the published server.
+- [x] A stranger can run the demo with three commands from the README.
+- [x] `npx mcp-project-context --root examples/demo-project` starts the published server.
 - [x] Limitations section names at least: pattern-based redaction, keyword search, stdio only.
 - [ ] Repo description, topics (`mcp`, `claude-code`, `typescript`) and social preview set on GitHub.
 
@@ -38,13 +38,15 @@ build before the merge (102), the counting rule for the WORKLOG numbers (103), t
 
 Not part of the PR; done in this order.
 
-- [ ] User: record `docs/assets/demo.gif` from the local build before the merge (decision 102).
-- [ ] User: create the environment `npm` (required reviewer: you, deployment tags `v*`) and its
+- [x] User: record `docs/assets/demo.gif` from the local build before the merge (decision 102).
+- [x] User: create the environment `npm` (required reviewer: you, deployment tags `v*`) and its
       secret `NPM_TOKEN` (granular token, publish rights).
-- [ ] User: tag `v0.1.0` on `main` and push it; `release.yml` publishes to npm with provenance.
-- [ ] Agent, after the user's OK: GitHub release `v0.1.0` with the 0.1.0 section of
+- [x] User: tag `v0.1.0` on `main` and push it; `release.yml` publishes to npm with provenance.
+- [x] Agent, after the user's OK: GitHub release `v0.1.0` with the 0.1.0 section of
       `CHANGELOG.md`, repo description and topics via `gh`.
 - [ ] User: upload the social preview image (no API for it).
-- [ ] User: `npx mcp-project-context --root examples/demo-project` against the published package
-      (AC28), and the three demo commands in a fresh clone.
-- [ ] User: set up npm Trusted Publishing and remove `NPM_TOKEN` (open points).
+- [x] User: `npx mcp-project-context --root examples/demo-project` against the published package
+      (AC28), and the three demo commands in a fresh clone. Done after #24: the demo in a fresh
+      clone connected `project-context` with the published package.
+- [x] User: set up npm Trusted Publishing and remove `NPM_TOKEN` (decision 106). Done after #25:
+      secret deleted, token revoked on npmjs.com.

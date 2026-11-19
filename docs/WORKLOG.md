@@ -13,10 +13,10 @@ itself" are not counted.
 
 | Metric | Value |
 | --- | --- |
-| Tickets done | 11 of 12 (stretch ticket 11 open) |
-| Total time | 9,1 h |
-| Questions the agent asked before coding | 60 |
-| Agent mistakes caught in review | 70 |
+| Tickets done | 12 of 13 (stretch ticket 11 open) |
+| Total time | 9,6 h |
+| Questions the agent asked before coding | 61 |
+| Agent mistakes caught in review | 75 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
 
 ## Template
@@ -671,8 +671,66 @@ itself" are not counted.
   repository. Only that test found the bug.
 - Agent check: none could be run before the PR; the fix needs the published package, and the user
   confirmed `@latest` works in the demo.
-- Not tested: the fix in a fresh clone of `main` after the merge.
+- Tested by the user after the merge: the demo in a fresh clone of `main` connects
+  `project-context` with the published package (AC28 of ticket 10).
 - PR: #24
+
+### Trusted Publishing (2026-11-19)
+
+- Time: included in the release entry above.
+- Change: `release.yml` publishes through npm Trusted Publishing (OIDC) instead of `NPM_TOKEN`
+  (decision 106). The user set up the trusted publisher on npmjs.com (repository, `release.yml`,
+  environment `npm`, `npm publish` allowed) and added the required reviewer to the `npm`
+  environment.
+  - [x] `NPM_TOKEN` deleted from the `npm` environment and the token revoked on npmjs.com.
+  - [ ] First release through OIDC (v0.1.1), then "disallow bypass 2fa tokens" on npmjs.com.
+- PR: #25
+
+### Ticket 12 – Stable performance test (2026-11-19)
+
+- Time: 30 min
+- Skills used: none (ticket written and implemented in the release session)
+- Questions the agent asked before coding: 1, plus a confirmation of the plan:
+  - Five calls on one server or the first call of five fresh servers. The user chose fresh
+    servers. The agent had claimed this keeps the cold first call of decision 85; it does not
+    (see review).
+- Decisions made (and where recorded):
+  - Decision 107 in `docs/requirements.md`. Median and the 1 s CI limit came from the user's
+    proposal; the `CI` values, the failure message and the 60 s timeout were taken by the agent
+    under rule 7.
+- Mistake the agent caught itself: breaking the search on purpose (1.5 s per term lookup) made the
+  test fail on vitest's 5 s timeout, without the timings in the message. It now has a 60 s timeout
+  and fails on the median: `median 3124 ms of [3142, 3117, 3352, 3115, 3124] ms, limit 1000 ms`.
+- Mistakes caught in review (fresh subagent):
+  - The question before coding promised that fresh server instances keep the call cold. They run
+    in one process, so from run 2 the JIT and the file cache are warm and the median measures warm
+    calls. The user kept the instances; decisions 85 and 107 and AC27 now say so (question after
+    the review).
+  - The ticket 10 and Trusted Publishing notes sat inside the release entry under `PR: #24`. They
+    now have their own entry and their own commit.
+  - The comment explaining the 60 s timeout sat after the last `expect`, away from the timeout.
+  - Ticket AC3 was ticked without saying it was checked only by hand. Now under "Not tested".
+  - Decision 107 claimed any slow search fails on the median; past about 12 s per call it still
+    fails on the timeout.
+- Agent checks: the test with and without `CI=true` passes locally; with the delay it fails under
+  `CI=true` on the median.
+- Tested: 7 new vitest tests in `test/perf.test.ts` (six `CI` values for the limit, the median of
+  odd and even lists); AC27 now runs five measurements.
+- Not tested:
+  - Ticket AC3 (a slow search fails in CI) has no regression test. It was checked once by hand
+    with an injected delay.
+  - The CI run of this exact test before the PR; it runs with the PR.
+- Wrong assumption caught in review: the agent asked whether to measure
+  "5 fresh servers, first call each" to keep the cold first call (decision 85).
+  The user agreed. The review showed that a new server object in the same
+  process is not cold: from run 2 on, JIT and file cache are warm, so the
+  median measures warm calls. Kept the code, fixed the docs to say what is
+  really measured. The truly cold start is covered by the stdio test
+  (ticket 09), which spawns dist/cli.js as a real process.
+  Lesson: a question offered as "(Recommended)" can carry a wrong premise;
+  the user's approval does not make it true. The fresh review is what
+  catches it.
+- PR: #27
 
 ## Skill improvements
 
@@ -692,3 +750,8 @@ itself" are not counted.
   Consider moving this rule into the skill itself.
 - Never use `git add -A`; stage explicit paths. In ticket 03 it swept the user's uncommitted
   WORKLOG note into a feature commit.
+
+### 2026-11-19 · implement ticket, perf test (ticket 12)
+- implement-ticket: when a question rests on a technical claim ("fresh
+  server = cold call"), state how the claim was verified, or mark it as an
+  assumption, before asking the user to choose.
