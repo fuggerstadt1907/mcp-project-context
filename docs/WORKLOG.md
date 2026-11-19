@@ -720,7 +720,7 @@ itself" are not counted.
   - Ticket AC3 (a slow search fails in CI) has no regression test. It was checked once by hand
     with an injected delay.
   - The CI run of this exact test before the PR; it runs with the PR.
-- PR: #
+- PR: #27
 
 ## Skill improvements
 
