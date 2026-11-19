@@ -633,8 +633,10 @@ itself" are not counted.
   three. Noted under open points.
 - Coverage: 94.9 % statements, 91.4 % branches, 95.3 % functions, 96.0 % lines for `src`.
 - Demo result: the user recorded Claude Code in the demo project with the local build (decision
-  102). Asked to implement T-003 after checking the relevant ADR, the agent called `list_adrs`,
-  `search_context` and `get_adr` before writing code. The 77 s recording is
+  102). Asked "Which accepted ADRs exist, and why do we use magic links?", the agent called
+  `list_adrs`, `search_context` and `get_adr`. Asked "What are our conventions?", it called
+  `get_conventions`. The raw tool output, opened with Ctrl+O, shows the secrets as
+  `[REDACTED:…]`. No implementation and no T-003 in the recording. The 77 s recording is
   `docs/assets/demo.gif` (10 fps, 1200 px wide, 4.3 MB).
 - Tested: 10 new vitest tests (1114 → 1124, including the perf test): `test/check-pack.test.ts`
   (accepted tarball, extra files under `dist/`, six rejected paths including `distx/` and a

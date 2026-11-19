@@ -52,14 +52,16 @@ cd mcp-project-context/examples/demo-project
 claude
 ```
 
-The demo project ships a `.mcp.json`, so Claude Code offers to enable the server on start. Then ask:
-_"Implement ticket T-003, check the relevant ADR first."_ Before writing code, the agent lists
-the ADRs, searches for the authentication decision and reads ADR 0002.
+The demo project ships a `.mcp.json`, so Claude Code offers to enable the server on start. In the
+recording below, the agent answers _"Which accepted ADRs exist, and why do we use magic links?"_
+with `list_adrs`, `search_context` and `get_adr`. Then _"What are our conventions?"_ calls
+`get_conventions`, and the raw tool output (Ctrl+O) shows the fake secrets in the demo
+conventions masked as `[REDACTED:<type>]` by the server.
 
-![Claude Code calling list_adrs, search_context and get_adr on the demo project](docs/assets/demo.gif)
+![Claude Code looking up the ADRs with list_adrs, search_context and get_adr, then reading the conventions with get_conventions, with secrets masked by the server](docs/assets/demo.gif)
 
-Some fixtures in the demo project hold fake secrets and contact details. Ask the agent for ticket
-T-002 or the conventions to see them come back as `[REDACTED:<type>]`.
+Ticket T-002 holds fake contact details; ask for it to see the email and phone number masked as
+well.
 
 ## Configuration
 
