@@ -373,6 +373,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 103 | Numbers in "How this was built" | Recounted with a rule now written into `docs/WORKLOG.md`: every item under "Mistakes caught in review" and under the user's own checks before the PR counts; mistakes the agent caught itself do not. After ticket 09 that gives 56 instead of 50. Recount asked for by the user, rule by the agent. | The old figure could not be reproduced from the entries. |
 | 104 | Release details | The shebang sits in `src/cli.ts`; esbuild keeps it and tsup marks `dist/cli.js` executable, so no tsup `banner` is needed. The stdio test runs `dist/cli.js` directly. README and rollout use `npx -y`, so the install never depends on npx detecting that stdin is not a terminal (stdin carries the protocol); the reason given first was wrong and was corrected in review. `prepublishOnly` runs `pnpm build` and `pnpm check:pack`, so a local `npm publish` cannot ship a stale or bloated tarball. `CHANGELOG.md` is part of the package. Decided by the agent under rule 7. | One place for the shebang, and a test that executes it. |
 | 105 | Package spec in the demo `.mcp.json` | `npx -y mcp-project-context@latest`. Changes decision 100. The README recommends a pinned version (`@0.1.0`) in a team's `.mcp.json`. Decided by the user after the fresh-clone test of v0.1.0. | Inside this repository npx resolves the bare name to the repository's own `package.json`, which has the same name and no build, and fails with "command not found". A version spec makes npx fetch from the registry. |
+| 106 | Trusted Publishing | From v0.1.1 on, `release.yml` publishes through npm Trusted Publishing (OIDC) instead of `NPM_TOKEN`. The job installs npm 11.5.1 or later and sets no `registry-url`, so `NODE_AUTH_TOKEN` stays unset. The trusted publisher on npmjs.com names this repository, `release.yml` and the environment `npm`. Provenance is still attached. Changes decision 101. Decided by the user after the v0.1.0 release. | No long-lived token that could leak; only an approved run of this workflow can publish. |
 
 ## Open points
 
@@ -401,9 +402,6 @@ Each ticket is testable on its own with `InMemoryTransport`.
   second during `pnpm check`; a local MCP client started from `dist/` at that moment fails.
 - Follow-up (CI): the `pnpm build` step after the tests is now redundant (the stdio test builds).
   Kept as an explicit check of the release build.
-- Follow-up (release): after the first publish, set up npm Trusted Publishing for
-  `release.yml` on npmjs.com, then remove `NPM_TOKEN` from the workflow and the `npm` environment
-  secrets. Trusted Publishing needs npm 11.5.1 or later in the workflow.
 - Follow-up (demo): Claude Code started in `examples/demo-project` also loads this repository's
   `CLAUDE.md` from the parent directory, so the demo agent sees our own workflow rules.
 - Follow-up (perf test): AC27 fails when another process loads the CPU (551 ms while a second

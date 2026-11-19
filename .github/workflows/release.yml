@@ -6,13 +6,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # npm Trusted Publishing (OIDC) and provenance
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     # Required reviewer: a pushed tag waits for the maintainer's approval before anything runs.
-    # NPM_TOKEN is an environment secret, so only an approved run can read it.
+    # The trusted publisher on npmjs.com names this environment, so no other job can publish.
     environment: npm
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+      # No registry-url: setup-node would then set NODE_AUTH_TOKEN, and npm would try that token
+      # instead of the OIDC exchange.
+      - name: npm 11.5.1 or later for Trusted Publishing
+        run: npm install -g npm@^11.5.1
       - name: Tag matches package.json version
         run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
       - name: Tagged commit is on main
@@ -34,5 +37,3 @@ jobs:
       - name: Tarball holds only dist/ and package docs
         run: pnpm check:pack
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
