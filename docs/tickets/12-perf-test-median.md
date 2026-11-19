@@ -17,13 +17,19 @@ of milliseconds.
 ## Scope
 
 - Measure several `search_context` calls and assert on the median instead of a single call.
-- Limit: 300 ms locally, 1 s in CI (`CI` environment variable set, as on GitHub Actions).
+- Limit: 300 ms locally, 1 s in CI (`CI` environment variable set and not empty, `false` or `0`,
+  as on GitHub Actions).
 - The failure message names the median, the single timings and the limit that applied.
 - Update NFR-7 and AC27 in `docs/requirements.md` and decision 85.
 
+## Decisions
+
+Recorded as requirements decision 107: median of five first calls on fresh servers, 300 ms locally
+and 1 s with `CI` set, failure message with all timings, 60 s test timeout.
+
 ## Acceptance criteria
 
-- [ ] AC27 asserts on the median of several calls, not on one call.
-- [ ] With `CI` set the limit is 1 s, without it 300 ms; a test pins which limit applies.
-- [ ] A search slowed down to the seconds range fails the test in CI as well.
-- [ ] NFR-7, AC27 and decision 85 describe the new rule.
+- [x] AC27 asserts on the median of several calls, not on one call.
+- [x] With `CI` set the limit is 1 s, without it 300 ms; a test pins which limit applies.
+- [x] A search slowed down to the seconds range fails the test in CI as well.
+- [x] NFR-7, AC27 and decision 85 describe the new rule.
