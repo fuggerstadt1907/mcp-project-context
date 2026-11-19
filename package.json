@@ -1,6 +1,6 @@
 {
   "name": "mcp-project-context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server that gives coding agents safe, read-only access to a repo's ADRs, tickets and conventions, with secret and PII redaction.",
   "type": "module",
   "license": "MIT",

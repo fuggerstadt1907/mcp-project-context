@@ -49,7 +49,7 @@ server and an update is a reviewed change:
   "mcpServers": {
     "project-context": {
       "command": "npx",
-      "args": ["-y", "mcp-project-context@0.1.0", "--root", "."]
+      "args": ["-y", "mcp-project-context@0.1.1", "--root", "."]
     }
   }
 }
@@ -182,11 +182,11 @@ The numbers, from [`docs/WORKLOG.md`](docs/WORKLOG.md):
 
 | | |
 | --- | --- |
-| Time, from requirements to release | 9.1 h |
-| Tickets | 11, each one pull request |
-| Questions the agent asked before writing code | 60 |
-| Mistakes caught in review before merging | 69 |
-| Tests | 1,124 vitest tests, 94.9 % statement coverage |
+| Time, from requirements to release | 9.6 h |
+| Tickets | 12, each one pull request |
+| Questions the agent asked before writing code | 61 |
+| Mistakes caught in review before merging | 75 |
+| Tests | 1,131 vitest tests, 94.9 % statement coverage |
 
 An example from ticket 09: the end-to-end test collects every string the server returns in a
 full session and checks that none of the four fake secrets from the demo project appears. It

@@ -732,6 +732,17 @@ itself" are not counted.
   catches it.
 - PR: #27
 
+### Release v0.1.1 (2026-11-19)
+
+- Time: TODO
+- Skills used: none
+- Change: version 0.1.1, CHANGELOG entry (demo `.mcp.json` fix, README for teams, perf test
+  median, Trusted Publishing). The README pins `@0.1.1` in the team `.mcp.json` and shows the
+  current WORKLOG numbers. No change under `src/`.
+- Agent checks: `pnpm check` (1,131 tests), `pnpm build`, `pnpm check:pack`.
+- Not tested before the merge: the publish through OIDC; it runs when the user tags `v0.1.1`.
+- PR: #
+
 ## Skill improvements
 
 ### 2026-11-16 · implement-ticket, first real run (ticket 01)
