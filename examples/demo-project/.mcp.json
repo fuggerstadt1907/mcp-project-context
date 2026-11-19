@@ -2,7 +2,7 @@
   "mcpServers": {
     "project-context": {
       "command": "npx",
-      "args": ["-y", "mcp-project-context", "--root", "."]
+      "args": ["-y", "mcp-project-context@latest", "--root", "."]
     }
   }
 }

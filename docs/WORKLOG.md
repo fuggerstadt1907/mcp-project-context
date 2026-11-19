@@ -14,9 +14,9 @@ itself" are not counted.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 11 of 12 (stretch ticket 11 open) |
-| Total time | 8,75 h |
+| Total time | 9,1 h |
 | Questions the agent asked before coding | 60 |
-| Agent mistakes caught in review | 69 |
+| Agent mistakes caught in review | 70 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
 
 ## Template
@@ -647,6 +647,32 @@ itself" are not counted.
     a fresh clone; both need the npm release.
   - GitHub description, topics and social preview; after the merge.
 - PR: #23
+
+### Release v0.1.0 and fresh-clone test (2026-11-19)
+
+- Time: 20 min (release run and re-run, fix of the demo `.mcp.json`, PR)
+- Skills used: none (release by the user, follow-up with the agent)
+- Release: the user tagged `v0.1.0` on `main`. `release.yml` published
+  `mcp-project-context@0.1.0` to npm with provenance; the user verified the provenance, and the
+  registry lists attestations for 0.1.0.
+- User's mistake: the `npm` environment and its `NPM_TOKEN` secret were first created in the wrong
+  repository. In this repository the job then ran in an `npm` environment without the secret, and
+  attempt 1 of the release run (09:11 UTC) failed in `npm publish` with `ENEEDAUTH`. After the
+  environment was set up here, attempt 2 (09:16 UTC) published.
+- Gaps found by the user's own criteria for the stage, checked after the release:
+  - The fresh-clone test of the three demo commands failed. Inside this repository,
+    `npx -y mcp-project-context` resolves to the repository's own `package.json`, which has the
+    same name and no build, so the server failed with "command not found". Outside the repository
+    the same command started 0.1.0. The demo `.mcp.json` now asks for
+    `mcp-project-context@latest`, which npx fetches from the registry (decision 105). The README
+    explains why and recommends pinning a version in a team's `.mcp.json`.
+- Lesson: every automated check was green: the stdio test, the tarball check and the `npx` start
+  from the local tarball. None of them ran the demo the way a stranger does, from a clone of this
+  repository. Only that test found the bug.
+- Agent check: none could be run before the PR; the fix needs the published package, and the user
+  confirmed `@latest` works in the demo.
+- Not tested: the fix in a fresh clone of `main` after the merge.
+- PR: #24
 
 ## Skill improvements
 
