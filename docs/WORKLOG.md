@@ -672,6 +672,11 @@ itself" are not counted.
 - Agent check: none could be run before the PR; the fix needs the published package, and the user
   confirmed `@latest` works in the demo.
 - Not tested: the fix in a fresh clone of `main` after the merge.
+- Trusted Publishing (decision 106, PR #25): the user set up the trusted publisher on npmjs.com
+  (repository, `release.yml`, environment `npm`, `npm publish` allowed) and added the required
+  reviewer to the `npm` environment.
+  - [x] `NPM_TOKEN` deleted from the `npm` environment and the token revoked on npmjs.com.
+  - [ ] First release through OIDC (v0.1.1), then "disallow bypass 2fa tokens" on npmjs.com.
 - PR: #24
 
 ## Skill improvements

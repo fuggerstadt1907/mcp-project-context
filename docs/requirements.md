@@ -235,6 +235,7 @@ Each ticket is testable on its own with `InMemoryTransport`.
 | 09 Integration tests | Goal, AC25, AC29 | done · 2026-11-18 · ticket-09-integration-tests |
 | 10 README, demo, release | NFR-9, Goal (demo) | done · 2026-11-19 · ticket-10-readme-release |
 | 11 Stretch: GitHub Issues | Out of v0.1 scope | open |
+| 12 Stable performance test | NFR-7, AC27 | open |
 
 ## Rollout & release
 
@@ -404,6 +405,6 @@ Each ticket is testable on its own with `InMemoryTransport`.
   Kept as an explicit check of the release build.
 - Follow-up (demo): Claude Code started in `examples/demo-project` also loads this repository's
   `CLAUDE.md` from the parent directory, so the demo agent sees our own workflow rules.
-- Follow-up (perf test): AC27 fails when another process loads the CPU (551 ms while a second
-  vitest suite ran on the same machine). It runs on its own within our suite (decision 85), but
-  not against foreign load. CI runners are not shared within a job.
+- Ticket 12 (perf test): AC27 fails when another process loads the CPU (551 ms while a second
+  vitest suite ran on the same machine) and failed once in CI on PR #24 (306 ms). Median of
+  several calls, 1 s limit in CI, 300 ms locally.
