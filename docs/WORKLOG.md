@@ -672,7 +672,7 @@ itself" are not counted.
 - Agent check: none could be run before the PR; the fix needs the published package, and the user
   confirmed `@latest` works in the demo.
 - Not tested: the fix in a fresh clone of `main` after the merge.
-- PR: #
+- PR: #24
 
 ## Skill improvements
 
