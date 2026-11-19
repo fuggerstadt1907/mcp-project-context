@@ -32,7 +32,7 @@ itself" are not counted.
   - ...
 - Mistakes caught in review:
   - What the agent did, why it was wrong, how it was fixed.
-- PR: #
+- PR: #28
 ```
 
 ## Entries
@@ -741,7 +741,7 @@ itself" are not counted.
   current WORKLOG numbers. No change under `src/`.
 - Agent checks: `pnpm check` (1,131 tests), `pnpm build`, `pnpm check:pack`.
 - Not tested before the merge: the publish through OIDC; it runs when the user tags `v0.1.1`.
-- PR: #
+- PR: #28
 
 ## Skill improvements
 
