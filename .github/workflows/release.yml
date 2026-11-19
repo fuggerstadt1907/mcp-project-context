@@ -11,6 +11,9 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Required reviewer: a pushed tag waits for the maintainer's approval before anything runs.
+    # NPM_TOKEN is an environment secret, so only an approved run can read it.
+    environment: npm
     steps:
       - uses: actions/checkout@v4
         with:

@@ -592,6 +592,9 @@ itself" are not counted.
   `NPM_TOKEN` secret if Trusted Publishing cannot be used yet, and a tarball allow-list check. The
   user sets the tag (decision 101). Trusted Publishing needs an existing package, so the first
   publish uses the token.
+- Additions by the user before the PR: the release job runs in a GitHub environment `npm` with
+  the user as required reviewer, `NPM_TOKEN` as its secret (decision 101); the demo GIF is
+  converted from the user's screen recording.
 - Decisions made (and where recorded):
   - Decisions 100–104 in `docs/requirements.md`. 104 (shebang in the source, `npx -y`,
     `prepublishOnly`) was taken by the agent under rule 7.

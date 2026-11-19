@@ -39,7 +39,8 @@ build before the merge (102), the counting rule for the WORKLOG numbers (103), t
 Not part of the PR; done in this order.
 
 - [ ] User: record `docs/assets/demo.gif` from the local build before the merge (decision 102).
-- [ ] User: create the `NPM_TOKEN` repository secret (granular token, publish rights).
+- [ ] User: create the environment `npm` (required reviewer: you, deployment tags `v*`) and its
+      secret `NPM_TOKEN` (granular token, publish rights).
 - [ ] User: tag `v0.1.0` on `main` and push it; `release.yml` publishes to npm with provenance.
 - [ ] Agent, after the user's OK: GitHub release `v0.1.0` with the 0.1.0 section of
       `CHANGELOG.md`, repo description and topics via `gh`.
