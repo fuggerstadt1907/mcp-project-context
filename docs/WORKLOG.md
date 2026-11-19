@@ -14,7 +14,7 @@ itself" are not counted.
 | Metric | Value |
 | --- | --- |
 | Tickets done | 11 of 12 (stretch ticket 11 open) |
-| Total time | 8,25 h + ticket 10 (TODO) |
+| Total time | 8,75 h |
 | Questions the agent asked before coding | 60 |
 | Agent mistakes caught in review | 69 |
 | Test coverage (src) | 94.9 % statements, 91.4 % branches (src/fs 92.2 %, redact.ts 98.2 %, src/tools 99.6 %) |
@@ -579,7 +579,7 @@ itself" are not counted.
 
 ### Ticket 10 – README, demo, release (2026-11-19)
 
-- Time: TODO
+- Time: 30 min
 - Skills used: implement-ticket
 - Questions the agent asked before coding: 4, in two rounds, plus a confirmation of the plan:
   - Three demo commands: a `.mcp.json` in the demo project, so `git clone`, `cd`, `claude` is

@@ -164,7 +164,7 @@ The numbers, from [`docs/WORKLOG.md`](docs/WORKLOG.md):
 
 | | |
 | --- | --- |
-| Time, from requirements to release | TODO h (entered after the PR review) |
+| Time, from requirements to release | 8.75 h |
 | Tickets | 11, each one pull request |
 | Questions the agent asked before writing code | 60 |
 | Mistakes caught in review before merging | 69 |
