@@ -32,7 +32,7 @@ itself" are not counted.
   - ...
 - Mistakes caught in review:
   - What the agent did, why it was wrong, how it was fixed.
-- PR: #28
+- PR: #
 ```
 
 ## Entries
